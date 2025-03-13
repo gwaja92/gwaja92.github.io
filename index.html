@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Binance BTC/USDT 차트</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+      color: #333;
+    }
+    #chart-container {
+      width: 80%;
+      margin: 30px auto;
+    }
+    #loading {
+      text-align: center;
+      font-size: 18px;
+      color: #333;
+    }
+    .chart {
+      margin-bottom: 30px;
+    }
+  </style>
+</head>
+<body>
+  <div id="chart-container">
+    <h1>Binance BTC/USDT 4시간 봉 차트</h1>
+    <div id="loading">로딩 중...</div>
+    <div class="chart">
+      <canvas id="priceChart"></canvas>
+    </div>
+    <div class="chart">
+      <canvas id="volumeChart"></canvas>
+    </div>
+  </div>
+
+  <script>
+    // Binance API에서 데이터를 가져오는 함수
+    async function getKlineData() {
+      const symbol = 'BTCUSDT'; // BTC/USDT 마켓
+      const interval = '4h';    // 4시간 봉
+      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=300`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        const labels = [];
+        const closePrices = [];
+        const volumes = [];  // 거래량 데이터 추가
+
+        // 봉 데이터를 차트에 맞게 변환
+        data.forEach(item => {
+          const timestamp = new Date(item[0]);
+          const formattedTimestamp = formatDate(timestamp);  // 시간을 yyMMdd HH:mm 형식으로 변환
+          const closePrice = parseFloat(item[4]);
+          const volume = parseFloat(item[5]);  // 거래량 데이터
+
+          labels.push(formattedTimestamp);
+          closePrices.push(closePrice);
+          volumes.push(volume);  // 거래량 추가
+        });
+
+        return { labels, closePrices, volumes };
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        alert('데이터를 가져오는 데 실패했습니다. 다시 시도해 주세요.');
+      }
+    }
+
+    // 시간을 yyMMdd HH:mm 형식으로 변환하는 함수
+    function formatDate(date) {
+      const yy = String(date.getFullYear()).slice(-2);  // 년도에서 마지막 2자리
+      const mm = String(date.getMonth() + 1).padStart(2, '0');  // 월
+      const dd = String(date.getDate()).padStart(2, '0');  // 일
+      const hh = String(date.getHours()).padStart(2, '0');  // 시간
+      const min = String(date.getMinutes()).padStart(2, '0');  // 분
+      return `${yy}${mm}${dd} ${hh}:${min}`;
+    }
+
+    // 이동 평균을 계산하는 함수
+    function calculateSMA(data, windowSize) {
+      let sma = [];
+      for (let i = 0; i < data.length; i++) {
+        if (i >= windowSize - 1) {
+          const windowData = data.slice(i - windowSize + 1, i + 1);
+          const sum = windowData.reduce((acc, val) => acc + val, 0);
+          sma.push(sum / windowSize);
+        } else {
+          sma.push(null); // 데이터가 부족하면 null
+        }
+      }
+      return sma;
+    }
+
+    // 표준 편차를 계산하는 함수
+    function calculateStdDev(data, sma, windowSize) {
+      let stdDev = [];
+      for (let i = 0; i < data.length; i++) {
+        if (i >= windowSize - 1) {
+          const windowData = data.slice(i - windowSize + 1, i + 1);
+          const mean = sma[i];
+          const squaredDiffs = windowData.map(x => Math.pow(x - mean, 2));
+          const avgSquareDiff = squaredDiffs.reduce((acc, val) => acc + val, 0) / windowSize;
+          stdDev.push(Math.sqrt(avgSquareDiff));
+        } else {
+          stdDev.push(null); // 데이터가 부족하면 null
+        }
+      }
+      return stdDev;
+    }
+
+    // 볼린저 밴드를 계산하는 함수
+    function calculateBollingerBands(closePrices, sma, stdDev, multiplier = 2.1) {  // multiplier를 2.1로 변경
+      let upperBand = [];
+      let lowerBand = [];
+      for (let i = 0; i < closePrices.length; i++) {
+        if (sma[i] !== null && stdDev[i] !== null) {
+          upperBand.push(sma[i] + (stdDev[i] * multiplier));
+          lowerBand.push(sma[i] - (stdDev[i] * multiplier));
+        } else {
+          upperBand.push(null);
+          lowerBand.push(null);
+        }
+      }
+      return { upperBand, lowerBand };
+    }
+
+    // 차트를 그리는 함수
+    async function drawChart() {
+      const { labels, closePrices, volumes } = await getKlineData();
+
+      const windowSize = 20; // 이동 평균을 계산할 기간
+      const sma = calculateSMA(closePrices, windowSize);
+      const stdDev = calculateStdDev(closePrices, sma, windowSize);
+      const { upperBand, lowerBand } = calculateBollingerBands(closePrices, sma, stdDev);
+
+      // 가격 차트
+      const priceCtx = document.getElementById('priceChart').getContext('2d');
+      new Chart(priceCtx, {
+        type: 'line',  // 라인 차트
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'BTC/USDT 4시간 봉',
+              data: closePrices,
+              borderColor: '#4bc0c0', // 라인 색상
+              fill: false,
+              borderWidth: 2,
+              pointRadius: 3, // 데이터 포인트 크기
+              pointBackgroundColor: '#fff', // 포인트 색상
+              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
+            },
+            {
+              label: '상한선 (Upper Band)',
+              data: upperBand,
+              borderColor: '#ff5733', // 상한선 색상
+              fill: false,
+              borderWidth: 1,
+              borderDash: [5, 5], // 대시 점선
+            },
+            {
+              label: '하한선 (Lower Band)',
+              data: lowerBand,
+              borderColor: '#ff5733', // 하한선 색상
+              fill: false,
+              borderWidth: 1,
+              borderDash: [5, 5], // 대시 점선
+            },
+            {
+              label: '중간선 (Middle Band)',
+              data: sma,
+              borderColor: '#ffcc00', // 중간선 색상
+              fill: false,
+              borderWidth: 1,
+            }
+          ]
+        },
+        options: {
+          scales: {
+            x: {
+              type: 'category', 
+              title: {
+                display: true,
+                text: '시간'
+              },
+              ticks: {
+                autoSkip: true,
+                maxRotation: 90,
+                minRotation: 45
+              }
+            },
+            y: {
+              beginAtZero: false,
+              title: {
+                display: true,
+                text: '가격 (USDT)'
+              }
+            }
+          },
+          responsive: true,
+          plugins: {
+            legend: {
+              display: true
+            }
+          },
+          animation: {
+            duration: 1000 // 차트 애니메이션 속도
+          }
+        }
+      });
+
+      // 거래량 차트
+      const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+      new Chart(volumeCtx, {
+        type: 'bar',  // 거래량은 막대 차트
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '거래량',
+              data: volumes,
+              backgroundColor: '#ffcc00',  // 거래량 색상
+              borderColor: '#ffcc00',
+              borderWidth: 1,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          scales: {
+            x: {
+              type: 'category',
+              title: {
+                display: true,
+                text: '시간'
+              },
+              ticks: {
+                autoSkip: true,
+                maxRotation: 90,
+                minRotation: 45
+              }
+            },
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '거래량'
+              }
+            }
+          },
+          responsive: true,
+          plugins: {
+            legend: {
+              display: false  // 거래량 차트에는 범례를 표시하지 않음
+            }
+          },
+          animation: {
+            duration: 1000 // 차트 애니메이션 속도
+          }
+        }
+      });
+
+      // 로딩 메시지 숨기기
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // 페이지 로드 시 차트를 그리기
+    window.onload = drawChart;
+  </script>
+</body>
+</html>
