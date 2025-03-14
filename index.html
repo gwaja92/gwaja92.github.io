@@ -96,7 +96,7 @@
       const dd = String(date.getDate()).padStart(2, '0');  // 일
       const hh = String(date.getHours()).padStart(2, '0');  // 시간
       const min = String(date.getMinutes()).padStart(2, '0');  // 분
-      return `${yy}${mm}${dd} ${hh}:${min}`;
+      return `${mm}-${dd} ${hh}H`;
     }
 
     // 이동 평균을 계산하는 함수
@@ -150,6 +150,13 @@
     // 차트를 그리는 함수
     async function drawChart() {
       const { labels, openPrices, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData();
+      let maxVal = 0;
+      for (let i = 0; i < highPrices.length; i++) {
+        if (maxVal < highPrices[i]) {
+          maxVal = highPrices[i];
+        }
+      }
+
 
       // 현재 가격 표시
       document.getElementById('current-price').innerText = `현재 가격: ${lastPrice.toFixed(2)} USDT`;
@@ -202,9 +209,9 @@
               label: '거래량',
               data: volumes,
               type: 'bar', // 거래량은 막대 차트
-              backgroundColor: '#ffcc00',
+              backgroundColor: '#AFBDFF',
               borderColor: '#ffcc00',
-              borderWidth: 1,
+              borderWidth: 0,
               fill: false,
               yAxisID: 'y2',  // 거래량을 보조 y축에 표시
             }
