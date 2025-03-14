@@ -19,12 +19,12 @@
       color: #333;
     }
     #chart-container {
-      width: 80%;
+      width: 100%;
       margin: 30px auto;
     }
     #loading {
       text-align: center;
-      font-size: 18px;
+      font-size: 10px;
       color: #333;
     }
     .chart {
@@ -157,8 +157,8 @@
               data: closePrices,
               borderColor: '#4bc0c0', // 라인 색상
               fill: false,
-              borderWidth: 2,
-              pointRadius: 3, // 데이터 포인트 크기
+              borderWidth: 1,
+              pointRadius: 0, // 데이터 포인트 크기
               pointBackgroundColor: '#fff', // 포인트 색상
               pointBorderColor: '#4bc0c0' // 포인트 경계 색상
             },
@@ -167,15 +167,15 @@
               data: upperBand,
               borderColor: '#ff5733', // 상한선 색상
               fill: false,
-              borderWidth: 1,
-              borderDash: [5, 5], // 대시 점선
+              borderWidth: 0,
+              borderDash: [1], // 대시 점선
             },
             {
               label: '하한선 (Lower Band)',
               data: lowerBand,
               borderColor: '#ff5733', // 하한선 색상
               fill: false,
-              borderWidth: 1,
+              borderWidth: 0,
               borderDash: [5, 5], // 대시 점선
             },
             {
@@ -198,13 +198,13 @@
               ticks: {
                 autoSkip: true,
                 maxRotation: 90,
-                minRotation: 45
+                minRotation: 90
               }
             },
             y: {
               beginAtZero: false,
               title: {
-                display: true,
+                display: false,
                 text: '가격 (USDT)'
               }
             }
@@ -212,7 +212,7 @@
           responsive: true,
           plugins: {
             legend: {
-              display: true
+              display: false
             }
           },
           animation: {
@@ -249,13 +249,13 @@
               ticks: {
                 autoSkip: true,
                 maxRotation: 90,
-                minRotation: 45
+                minRotation: 90
               }
             },
             y: {
               beginAtZero: true,
               title: {
-                display: true,
+                display: false,
                 text: '거래량'
               }
             }
