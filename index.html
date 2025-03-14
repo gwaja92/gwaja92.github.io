@@ -178,7 +178,7 @@
               data: closePrices,
               borderColor: '#4bc0c0',
               fill: false,
-              borderWidth: 1,
+              borderWidth: 3,
               pointRadius: 0,
             },
             {
@@ -186,7 +186,7 @@
               data: upperBand,
               borderColor: '#ff5733',
               fill: false,
-              borderWidth: 1,
+              borderWidth: 0.3,
               pointRadius: 0,
             },
             {
@@ -194,7 +194,7 @@
               data: lowerBand,
               borderColor: '#ff5733',
               fill: false,
-              borderWidth: 1,
+              borderWidth: 0.3,
               pointRadius: 0,
             },
             {
@@ -254,7 +254,10 @@
     }
 
     // 페이지 로드 시 차트를 그리기
-    window.onload = drawChart;
+    window.onload = function() {
+      drawChart();  // 첫 번째로 차트를 그리기
+      setInterval(drawChart, 3000);  // 3초마다 차트 갱신
+    };
   </script>
 </body>
 </html>
