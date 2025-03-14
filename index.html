@@ -21,14 +21,18 @@
     #chart-container {
       width: 100%;
       margin: 30px auto;
+      padding-right: 20px; /* 오른쪽 마진 추가 */
     }
     #loading {
       text-align: center;
       font-size: 1px;
       color: #333;
     }
-    .chart {
-      margin-bottom: 10px;
+    .price-label {
+      font-size: 20px;
+      font-weight: bold;
+      color: #4bc0c0;
+      text-align: center;
     }
   </style>
 </head>
@@ -36,11 +40,9 @@
   <div id="chart-container">
     <h1>Binance BTC/USDT 4H</h1>
     <div id="loading">로딩 중...</div>
+    <div class="price-label" id="current-price">현재 가격: 로딩 중...</div> <!-- 현재 가격 표시 -->
     <div class="chart">
-      <canvas id="priceChart"></canvas>
-    </div>
-    <div class="chart">
-      <canvas id="volumeChart"></canvas>
+      <canvas id="combinedChart"></canvas>
     </div>
   </div>
 
@@ -57,21 +59,30 @@
 
         const labels = [];
         const closePrices = [];
+        const openPrices = [];
+        const highPrices = [];
+        const lowPrices = [];
         const volumes = [];  // 거래량 데이터 추가
 
         // 봉 데이터를 차트에 맞게 변환
         data.forEach(item => {
           const timestamp = new Date(item[0]);
           const formattedTimestamp = formatDate(timestamp);  // 시간을 yyMMdd HH:mm 형식으로 변환
+          const openPrice = parseFloat(item[1]);
+          const highPrice = parseFloat(item[2]);
+          const lowPrice = parseFloat(item[3]);
           const closePrice = parseFloat(item[4]);
           const volume = parseFloat(item[5]);  // 거래량 데이터
 
           labels.push(formattedTimestamp);
+          openPrices.push(openPrice);
+          highPrices.push(highPrice);
+          lowPrices.push(lowPrice);
           closePrices.push(closePrice);
           volumes.push(volume);  // 거래량 추가
         });
 
-        return { labels, closePrices, volumes };
+        return { labels, openPrices, highPrices, lowPrices, closePrices, volumes, lastPrice: closePrices[closePrices.length - 1] }; // 마지막 가격도 반환
       } catch (error) {
         console.error('Error fetching data:', error);
         alert('데이터를 가져오는 데 실패했습니다. 다시 시도해 주세요.');
@@ -138,81 +149,82 @@
 
     // 차트를 그리는 함수
     async function drawChart() {
-      const { labels, closePrices, volumes } = await getKlineData();
+      const { labels, openPrices, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData();
+
+      // 현재 가격 표시
+      document.getElementById('current-price').innerText = `현재 가격: ${lastPrice.toFixed(2)} USDT`;
 
       const windowSize = 20; // 이동 평균을 계산할 기간
       const sma = calculateSMA(closePrices, windowSize);
       const stdDev = calculateStdDev(closePrices, sma, windowSize);
       const { upperBand, lowerBand } = calculateBollingerBands(closePrices, sma, stdDev);
 
-      // 가격 차트
-      const priceCtx = document.getElementById('priceChart').getContext('2d');
-      new Chart(priceCtx, {
-        type: 'line',  // 라인 차트
+      // 차트 설정
+      const ctx = document.getElementById('combinedChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
         data: {
           labels: labels,
           datasets: [
             {
-              label: 'BTC/USDT 4시간 봉',
+              label: 'BTC/USDT 4시간 봉 (가격)',
               data: closePrices,
-              borderColor: '#4bc0c0', // 라인 색상
+              borderColor: '#4bc0c0',
               fill: false,
               borderWidth: 1,
-              pointRadius: 0, // 데이터 포인트 크기
-              pointBackgroundColor: '#fff', // 포인트 색상
-              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
+              pointRadius: 0,
             },
             {
               label: '상한선 (Upper Band)',
               data: upperBand,
-              borderColor: '#ff5733', // 상한선 색상
+              borderColor: '#ff5733',
               fill: false,
               borderWidth: 1,
-              pointRadius: 0, // 데이터 포인트 크기
-              pointBackgroundColor: '#fff', // 포인트 색상
-              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
+              pointRadius: 0,
             },
             {
               label: '하한선 (Lower Band)',
               data: lowerBand,
-              borderColor: '#ff5733', // 하한선 색상
+              borderColor: '#ff5733',
               fill: false,
               borderWidth: 1,
-              pointRadius: 0, // 데이터 포인트 크기
-              pointBackgroundColor: '#fff', // 포인트 색상
-              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
+              pointRadius: 0,
             },
             {
               label: '중간선 (Middle Band)',
               data: sma,
-              borderColor: '#ffcc00', // 중간선 색상
+              borderColor: '#ffcc00',
               fill: false,
               borderWidth: 2,
-              pointRadius: 0, // 데이터 포인트 크기
-              pointBackgroundColor: '#fff', // 포인트 색상
-              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
+              pointRadius: 0,
+            },
+            {
+              label: '거래량',
+              data: volumes,
+              type: 'bar', // 거래량은 막대 차트
+              backgroundColor: '#ffcc00',
+              borderColor: '#ffcc00',
+              borderWidth: 1,
+              fill: false,
+              yAxisID: 'y2',  // 거래량을 보조 y축에 표시
             }
           ]
         },
         options: {
           scales: {
-            x: {
-              type: 'category', 
-              title: {
-                display: false,
-                text: '시간'
-              },
-              ticks: {
-                autoSkip: true,
-                maxRotation: 45,
-                minRotation: 45
-              }
-            },
             y: {
               beginAtZero: false,
               title: {
                 display: false,
-                text: '가격 (USDT)'
+                text: '가격 (USDT)',
+              }
+            },
+            y2: {
+              position: 'right',
+              beginAtZero: true,
+              title: {
+                display: false,
+                text: '거래량',
               }
             }
           },
@@ -225,58 +237,7 @@
             }
           },
           animation: {
-            duration: 1000 // 차트 애니메이션 속도
-          }
-        }
-      });
-
-      // 거래량 차트
-      const volumeCtx = document.getElementById('volumeChart').getContext('2d');
-      new Chart(volumeCtx, {
-        type: 'bar',  // 거래량은 막대 차트
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: '거래량',
-              data: volumes,
-              backgroundColor: '#ffcc00',  // 거래량 색상
-              borderColor: '#ffcc00',
-              borderWidth: 1,
-              fill: false
-            }
-          ]
-        },
-        options: {
-          scales: {
-            x: {
-              type: 'category',
-              title: {
-                display: false,
-                text: '시간'
-              },
-              ticks: {
-                autoSkip: true,
-                maxRotation: 45,
-                minRotation: 45
-              }
-            },
-            y: {
-              beginAtZero: true,
-              title: {
-                display: false,
-                text: '거래량'
-              }
-            }
-          },
-          responsive: true,
-          plugins: {
-            legend: {
-              display: false  // 거래량 차트에는 범례를 표시하지 않음
-            }
-          },
-          animation: {
-            duration: 1000 // 차트 애니메이션 속도
+            duration: 1000
           }
         }
       });
