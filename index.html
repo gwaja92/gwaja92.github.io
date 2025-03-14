@@ -24,17 +24,17 @@
     }
     #loading {
       text-align: center;
-      font-size: 10px;
+      font-size: 1px;
       color: #333;
     }
     .chart {
-      margin-bottom: 30px;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 <body>
   <div id="chart-container">
-    <h1>Binance BTC/USDT 4시간 봉 차트</h1>
+    <h1>Binance BTC/USDT 4H</h1>
     <div id="loading">로딩 중...</div>
     <div class="chart">
       <canvas id="priceChart"></canvas>
@@ -167,23 +167,30 @@
               data: upperBand,
               borderColor: '#ff5733', // 상한선 색상
               fill: false,
-              borderWidth: 0,
-              borderDash: [1], // 대시 점선
+              borderWidth: 1,
+              pointRadius: 0, // 데이터 포인트 크기
+              pointBackgroundColor: '#fff', // 포인트 색상
+              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
             },
             {
               label: '하한선 (Lower Band)',
               data: lowerBand,
               borderColor: '#ff5733', // 하한선 색상
               fill: false,
-              borderWidth: 0,
-              borderDash: [5, 5], // 대시 점선
+              borderWidth: 1,
+              pointRadius: 0, // 데이터 포인트 크기
+              pointBackgroundColor: '#fff', // 포인트 색상
+              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
             },
             {
               label: '중간선 (Middle Band)',
               data: sma,
               borderColor: '#ffcc00', // 중간선 색상
               fill: false,
-              borderWidth: 1,
+              borderWidth: 2,
+              pointRadius: 0, // 데이터 포인트 크기
+              pointBackgroundColor: '#fff', // 포인트 색상
+              pointBorderColor: '#4bc0c0' // 포인트 경계 색상
             }
           ]
         },
@@ -192,13 +199,13 @@
             x: {
               type: 'category', 
               title: {
-                display: true,
+                display: false,
                 text: '시간'
               },
               ticks: {
                 autoSkip: true,
-                maxRotation: 90,
-                minRotation: 90
+                maxRotation: 45,
+                minRotation: 45
               }
             },
             y: {
@@ -210,6 +217,8 @@
             }
           },
           responsive: true,
+          maintainAspectRatio: false,
+          aspectRatio: 1,
           plugins: {
             legend: {
               display: false
@@ -243,13 +252,13 @@
             x: {
               type: 'category',
               title: {
-                display: true,
+                display: false,
                 text: '시간'
               },
               ticks: {
                 autoSkip: true,
-                maxRotation: 90,
-                minRotation: 90
+                maxRotation: 45,
+                minRotation: 45
               }
             },
             y: {
