@@ -185,6 +185,8 @@
       return priceLines.slice(0, num).map(line => line[0]);  // 상위 num개의 저항선/지지선만 추출
     }
 
+    let chart = null;  // 차트 객체를 저장
+
     // 차트를 그리는 함수
     async function drawChart() {
       const { labels, openPrices, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData();
@@ -211,87 +213,91 @@
       const { upperBand, lowerBand } = calculateBollingerBands(closePrices, sma, stdDev);
       const supportResistanceLine = calculateSRLine(highPrices, lowPrices, volumes);
 
-      // 차트 설정
-      let ctx = document.getElementById('combinedChart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: 'BTC/USDT 4시간 봉 (가격)',
-              data: closePrices,
-              borderColor: '#4bc0c0',
-              fill: false,
-              borderWidth: 2,
-              pointRadius: 0,
-            },
-            {
-              label: '중간선 (Middle Band)',
-              data: sma,
-              borderColor: '#ffcc00',
-              fill: false,
-              borderWidth: 2,
-              pointRadius: 0,
-            },
-            {
-              label: '거래량',
-              data: volumes,
-              type: 'bar', // 거래량은 막대 차트
-              //backgroundColor: '#AFBDFF',
-              backgroundColor: volumeColors,
-              fill: false,
-              yAxisID: 'y2',  // 거래량을 보조 y축에 표시
-            }
-          ]
-        },
-        options: {
-          scales: {
-            y: {
-              beginAtZero: false,
-              title: {
-                display: false,
-                text: '가격 (USDT)',
+      // 차트가 이미 존재하면 업데이트
+      if (chart) {
+        // 데이터 갱신
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = closePrices;
+        chart.data.datasets[1].data = calculateSMA(closePrices, 20);
+        chart.data.datasets[2].data = volumes;
+        chart.update();  // 차트 업데이트
+      } else {
+        // 차트가 없다면 새로 그리기
+        let ctx = document.getElementById('combinedChart').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'BTC/USDT 4시간 봉 (가격)',
+                data: closePrices,
+                borderColor: '#4bc0c0',
+                fill: false,
+                borderWidth: 2,
+                pointRadius: 0,
+              },
+              {
+                label: '중간선 (Middle Band)',
+                data: calculateSMA(closePrices, 20),
+                borderColor: '#ffcc00',
+                fill: false,
+                borderWidth: 2,
+                pointRadius: 0,
+              },
+              {
+                label: '거래량',
+                data: volumes,
+                type: 'bar',
+                backgroundColor: volumes.map(volume => volume > (volumes.reduce((sum, volume) => sum + volume, 0) / volumes.length) * 2.5 ? '#FF9E56' : '#AFBDFF'),
+                fill: false,
+                yAxisID: 'y2',
               }
-            },
-            y2: {
-              position: 'right',
-              beginAtZero: true,
-            }
+            ]
           },
-          responsive: true,
-          maintainAspectRatio: false,
-          aspectRatio: 1,
-          plugins: {
-            legend: {
-              display: false
-            },
-            annotation: {
-              annotations: supportResistanceLine.map((level, index) => ({
-              type: 'line',
-              mode: 'horizontal',
-              scaleID: 'y',
-              value: level,
-              borderColor: 'rgba(51, 255, 87, 0.1)', // 투명한 녹색 (alpha: 0.5)
-              borderWidth: 0.1,
-              label: {
-                content: `Level ${index + 1}`,
-                enabled: true,
-                position: 'center',
-                font: {
-                  size: 10,
-                  weight: 'bold'
+          options: {
+            scales: {
+              y: {
+                beginAtZero: false,
+                title: { display: false, text: '가격 (USDT)' },
+              },
+              y2: {
+                position: 'right',
+                grid: {
+                  drawOnChartArea: false,  // y2 그리드 라인 없애기
                 },
-                color: '#FFFFFF'
               }
-              }))
-            }
-          },
-          animation: {
-            duration: 1000
+            },
+            responsive: true,
+            maintainAspectRatio: false,
+            aspectRatio: 1,
+            plugins: {
+              legend: { display: false },
+              annotation: {
+                annotations: calculateSRLine(highPrices, lowPrices, volumes).map((level, index) => ({
+                  type: 'line',
+                  mode: 'horizontal',
+                  scaleID: 'y',
+                  value: level,
+                  borderColor: 'rgba(51, 255, 87, 0.1)',
+                  borderWidth: 0.1,
+                  label: {
+                    content: `Level ${index + 1}`,
+                    enabled: true,
+                    position: 'center',
+                    font: { size: 10, weight: 'bold' },
+                    color: '#FFFFFF',
+                  }
+                }))
+              }
+            },
+            animation: { duration: 1000 }
           }
-        }
-      });
+        });
+      }
+
+      // 현재 가격 표시
+      document.getElementById('current-price').innerText = `현재 가격: ${lastPrice.toFixed(2)} USDT`;
 
       // 로딩 메시지 숨기기
       document.getElementById('loading').style.display = 'none';
