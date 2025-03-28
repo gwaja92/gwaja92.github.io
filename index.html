@@ -39,8 +39,17 @@
 </head>
 <body>
   <div id="chart-container">
-    <h1>BTC PRICE 4H</h1>
+    <h1>BTC-USDT 4H</h1>
     <div id="loading">로딩 중...</div>
+    <div id="time-controls" style="text-align: center; margin-bottom: 20px;">
+      <button class="time-btn" data-interval="5m">5m</button>
+      <button class="time-btn" data-interval="15m">15m</button>
+      <button class="time-btn" data-interval="30m">30m</button>
+      <button class="time-btn" data-interval="1h">1H</button>
+      <button class="time-btn" data-interval="2h">2H</button>
+      <button class="time-btn" data-interval="4h">4H</button>
+      <button class="time-btn" data-interval="1d">1D</button>
+    </div>
     <div class="price-label" id="current-price">현재 가격: 로딩 중...</div> <!-- 현재 가격 표시 -->
     <div class="chart">
       <canvas id="combinedChart"></canvas>
@@ -48,11 +57,24 @@
   </div>
 
   <script>
+
+    let currentInterval = '4h';  // 기본 시간 간격 (4시간)
+
+    // 시간 버튼 클릭 시 바로 차트 갱신
+    document.querySelectorAll('.time-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        currentInterval = this.getAttribute('data-interval'); // 버튼의 데이터 속성에서 interval 값 가져오기
+        document.querySelector('h1').textContent = `BTC-USDT ${currentInterval.toUpperCase()}`;
+        document.getElementById('interval-label').innerText = currentInterval.toUpperCase(); // 화면에 표시된 시간 간격 변경
+        drawChart();  // 바로 차트 갱신
+      });
+    });
+
     // Binance API에서 데이터를 가져오는 함수
     async function getKlineData() {
       const symbol = 'BTCUSDT'; // BTC/USDT 마켓
       const interval = '4h';    // 4시간 봉
-      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=300`;
+      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${currentInterval}&limit=300`;
 
       try {
         const response = await fetch(url);
@@ -190,12 +212,6 @@
     // 차트를 그리는 함수
     async function drawChart() {
       const { labels, openPrices, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData();
-      let maxVal = 0;
-      for (let i = 0; i < highPrices.length; i++) {
-        if (maxVal < highPrices[i]) {
-          maxVal = highPrices[i];
-        }
-      }
 
       // 거래량 기준 값 설정
       const averageVolume = volumes.reduce((sum, volume) => sum + volume, 0) / volumes.length;
@@ -203,10 +219,7 @@
 
       // 거래량 색상 설정 (기준보다 크면 빨간색, 아니면 기본 색상)
       const volumeColors = volumes.map(volume => volume > volumeThreshold ? '#FF9E56' : '#AFBDFF'); // 기준보다 크면 빨간색, 아니면 파란색
-
-      // 현재 가격 표시
-      document.getElementById('current-price').innerText = `현재 가격: ${lastPrice.toFixed(2)} USDT`;
-
+      
       const windowSize = 20; // 이동 평균을 계산할 기간
       const sma = calculateSMA(closePrices, windowSize);
       const stdDev = calculateStdDev(closePrices, sma, windowSize);
@@ -220,6 +233,26 @@
         chart.data.datasets[0].data = closePrices;
         chart.data.datasets[1].data = calculateSMA(closePrices, 20);
         chart.data.datasets[2].data = volumes;
+        chart.data.datasets[2].backgroundColor = volumeColors;  // 거래량 색상 반영
+
+        // y2 (거래량) 스케일 업데이트
+        chart.options.scales.y2.max = Math.max(...volumes) * 5;  // 거래량의 최대값에 5배를 곱해서 표시
+        chart.options.plugins.annotation.annotations = supportResistanceLine.map((level, index) => ({
+          type: 'line',
+          mode: 'horizontal',
+          scaleID: 'y',
+          value: level,
+          borderColor: 'rgba(51, 255, 87, 0.005)',
+          borderWidth: 2,
+          label: {
+            content: `Level ${index + 1}`,
+            enabled: true,
+            position: 'center',
+            font: { size: 10, weight: 'bold' },
+            color: '#FFFFFF',
+          }
+        }));
+
         chart.update();  // 차트 업데이트
       } else {
         // 차트가 없다면 새로 그리기
@@ -249,7 +282,7 @@
                 label: '거래량',
                 data: volumes,
                 type: 'bar',
-                backgroundColor: volumes.map(volume => volume > (volumes.reduce((sum, volume) => sum + volume, 0) / volumes.length) * 2.5 ? '#FF9E56' : '#AFBDFF'),
+                backgroundColor: volumeColors,
                 fill: false,
                 yAxisID: 'y2',
               }
@@ -263,6 +296,7 @@
               },
               y2: {
                 position: 'right',
+                max : Math.max(...volumes) * 5,
                 grid: {
                   drawOnChartArea: false,  // y2 그리드 라인 없애기
                 },
@@ -279,8 +313,8 @@
                   mode: 'horizontal',
                   scaleID: 'y',
                   value: level,
-                  borderColor: 'rgba(51, 255, 87, 0.1)',
-                  borderWidth: 0.1,
+                  borderColor: 'rgba(51, 255, 87, 0.005)',
+                  borderWidth: 2,
                   label: {
                     content: `Level ${index + 1}`,
                     enabled: true,
@@ -297,7 +331,7 @@
       }
 
       // 현재 가격 표시
-      document.getElementById('current-price').innerText = `현재 가격: ${lastPrice.toFixed(2)} USDT`;
+      document.getElementById('current-price').innerText = `Current Price : ${lastPrice.toFixed(2)} USDT`;
 
       // 로딩 메시지 숨기기
       document.getElementById('loading').style.display = 'none';
