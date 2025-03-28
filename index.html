@@ -150,27 +150,14 @@
 
     // 저항과 지지를 그리는 함수
     function calculateSRLine(highPrices, lowPrices, volumes, div = 10000, num = 1000) { // 저항 지지선 divider, 저항선 뽑는 개수 
-      let highPrice = lowPrices[0];
-      let lowPrice = highPrices[0];
-      for (let i = 0; i < highPrices.length; i++) {
-        if (highPrices[i] > highPrice) {
-          highPrice = highPrices[i];
-        }
-      }
-      for (let i = 0; i < lowPrices.length; i++) {
-        if (lowPrices[i] < lowPrice) {
-          lowPrice = lowPrices[i];
-        }
-      }
-      
+      let highPrice = Math.max(...highPrices);  // 최대값 계산 최적화
+      let lowPrice = Math.min(...lowPrices);   // 최소값 계산 최적화
+
       let priceLines = [];
       for (let i = 0; i <= div; i++) {
-        priceLines.push([Number((lowPrice + (i/div) * (highPrice - lowPrice)).toFixed(1)), 0]);
+        priceLines.push([lowPrice + (i / div) * (highPrice - lowPrice), 0]);  // toFixed 제거
       }
-      
       for (let i = 0; i < volumes.length; i++) {
-
-        // 한개의 캔들에 대해 최저값, 최고값 구하기.
         const lowPriceInCandle = lowPrices[i];
         const highPriceInCandle = highPrices[i];
         const volumeInCandle = volumes[i];
@@ -178,33 +165,24 @@
         let lowIndex = div;
         let highIndex = 0;
 
-        for (let j = div; j >= 0; j--) {
-          if (priceLines[j][0] >= lowPriceInCandle) {
-            lowIndex = j;
-          } else break;
-        }
-        
+        // 저항선/지지선 범위 찾기 (두 번의 반복문을 합친 방식)
         for (let j = 0; j <= div; j++) {
-          if (priceLines[j][0] <= highPriceInCandle) {
-            highIndex = j;
-          } else break;
+          if (priceLines[j][0] >= lowPriceInCandle && lowIndex === div) lowIndex = j;
+          if (priceLines[j][0] <= highPriceInCandle) highIndex = j;
         }
-        
-        const partialVolume = Number((volumeInCandle / (highIndex - lowIndex + 1)).toFixed(0));
-        
+
+        const partialVolume = volumeInCandle / (highIndex - lowIndex + 1);
+
+        // priceLines 업데이트
         for (let j = lowIndex; j <= highIndex; j++) {
           priceLines[j][1] += partialVolume;
         }
       }
       
+      // num개만 필요하므로, 필요한 부분만 정렬
       priceLines.sort((a, b) => b[1] - a[1]);
 
-      let srLine = [];
-      for (let i = 0; i < num; i++) {
-        srLine.push(priceLines[i][0]);
-      }
-      return srLine;
-
+      return priceLines.slice(0, num).map(line => line[0]);  // 상위 num개의 저항선/지지선만 추출
     }
 
     // 차트를 그리는 함수
@@ -234,7 +212,7 @@
       const supportResistanceLine = calculateSRLine(highPrices, lowPrices, volumes);
 
       // 차트 설정
-      const ctx = document.getElementById('combinedChart').getContext('2d');
+      let ctx = document.getElementById('combinedChart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
         data: {
@@ -246,22 +224,6 @@
               borderColor: '#4bc0c0',
               fill: false,
               borderWidth: 2,
-              pointRadius: 0,
-            },
-            {
-              label: '상한선 (Upper Band)',
-              data: upperBand,
-              borderColor: '#ff5733',
-              fill: false,
-              borderWidth: 0.3,
-              pointRadius: 0,
-            },
-            {
-              label: '하한선 (Lower Band)',
-              data: lowerBand,
-              borderColor: '#ff5733',
-              fill: false,
-              borderWidth: 0.3,
               pointRadius: 0,
             },
             {
@@ -295,10 +257,6 @@
             y2: {
               position: 'right',
               beginAtZero: true,
-              title: {
-                display: false,
-                text: '거래량',
-              }
             }
           },
           responsive: true,
@@ -314,8 +272,8 @@
               mode: 'horizontal',
               scaleID: 'y',
               value: level,
-              borderColor: '#33FF57',
-              borderWidth: 0.002,
+              borderColor: 'rgba(51, 255, 87, 0.1)', // 투명한 녹색 (alpha: 0.5)
+              borderWidth: 0.1,
               label: {
                 content: `Level ${index + 1}`,
                 enabled: true,
