@@ -57,12 +57,94 @@
   </div>
 
   <script>
-
+    let symbol = 'BTCUSDT';
+    let lsPositCount = 0;
     let currentInterval = '4h';  // 기본 시간 간격 (4시간)
+    let dataLimit = 300;
+    let longShortRatioList = [];
 
+    async function getTopLongShortPositionRatio() {
+      
+      const url = `https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=${currentInterval}&limit=${dataLimit}`;
+
+      try {
+        // Fetch API를 사용하여 Binance API에서 데이터 가져오기
+        const response = await fetch(url);
+
+        // 응답 상태가 성공적이면 데이터 반환
+        if (response.ok) {
+          const data = await response.json();
+
+          // longAccount 값을 숫자로 변환하여 리스트로 만들기
+          let longAccounts = data.map(item => parseFloat(item.longAccount));
+          
+          // 부족한 길이를 0으로 앞쪽에 채우기
+          longAccounts = new Array(dataLimit - longAccounts.length).fill(0).concat(longAccounts);
+          
+          return longAccounts;
+        } else {
+          console.error('Error fetching data: ', response.status);
+        }
+      } catch (error) {
+        console.error('Error occurred: ', error);
+      }
+    }
+
+    async function getTopLongShortAccountRatio() {
+      
+      const url = `https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${symbol}&period=${currentInterval}&limit=${dataLimit}`;
+
+      try {
+        // Fetch API를 사용하여 Binance API에서 데이터 가져오기
+        const response = await fetch(url);
+
+        // 응답 상태가 성공적이면 데이터 반환
+        if (response.ok) {
+          const data = await response.json();
+
+          // longAccount 값을 숫자로 변환하여 리스트로 만들기
+          let longAccounts = data.map(item => parseFloat(item.longAccount));
+          
+          // 부족한 길이를 0으로 앞쪽에 채우기
+          longAccounts = new Array(dataLimit - longAccounts.length).fill(0).concat(longAccounts);
+          
+          return longAccounts;
+        } else {
+          console.error('Error fetching data: ', response.status);
+        }
+      } catch (error) {
+        console.error('Error occurred: ', error);
+      }
+    }
+    
+    async function getLongShortSpecialRatio() {
+      
+      if (lsPositCount == 0 || lsPositCount >= 20) {
+        const longPositions = await getTopLongShortPositionRatio();
+        const longAccounts = await getTopLongShortAccountRatio();
+        
+        let calculateRatio = [];
+        for (let i = 0; i < dataLimit; i++) {
+          const ratio = (longPositions[i] * 0.8) + (longAccounts[i] * 0.2);
+          calculateRatio.push(ratio / (1 - ratio));
+        }
+        longShortRatioList = calculateRatio;
+
+        if (lsPositCount == 0) {
+          lsPositCount++;
+        } else {
+          lsPositCount = 1;
+        }
+      } else {
+        lsPositCount++;
+      }
+
+    }
+    
     // 시간 버튼 클릭 시 바로 차트 갱신
     document.querySelectorAll('.time-btn').forEach(button => {
       button.addEventListener('click', function() {
+        lsPositCount = 0;
         currentInterval = this.getAttribute('data-interval'); // 버튼의 데이터 속성에서 interval 값 가져오기
         document.querySelector('h1').textContent = `BTC-USDT ${currentInterval.toUpperCase()}`;
         document.getElementById('interval-label').innerText = currentInterval.toUpperCase(); // 화면에 표시된 시간 간격 변경
@@ -72,9 +154,7 @@
 
     // Binance API에서 데이터를 가져오는 함수
     async function getKlineData() {
-      const symbol = 'BTCUSDT'; // BTC/USDT 마켓
-      const interval = '4h';    // 4시간 봉
-      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${currentInterval}&limit=300`;
+      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${currentInterval}&limit=${dataLimit}`;
 
       try {
         const response = await fetch(url);
@@ -216,6 +296,7 @@
       // 거래량 기준 값 설정
       const averageVolume = volumes.reduce((sum, volume) => sum + volume, 0) / volumes.length;
       const volumeThreshold = averageVolume * 2.5;
+      const maxVolume = Math.max(...volumes);
 
       // 거래량 색상 설정 (기준보다 크면 빨간색, 아니면 기본 색상)
       const volumeColors = volumes.map(volume => volume > volumeThreshold ? '#FF9E56' : '#AFBDFF'); // 기준보다 크면 빨간색, 아니면 파란색
@@ -226,6 +307,11 @@
       const { upperBand, lowerBand } = calculateBollingerBands(closePrices, sma, stdDev);
       const supportResistanceLine = calculateSRLine(highPrices, lowPrices, volumes);
 
+      await getLongShortSpecialRatio();
+      const minRatio = Math.min(...longShortRatioList.filter(s => s !== 0));
+      const maxRatio = Math.max(...longShortRatioList.filter(s => s !== 0));
+      const longRatio = longShortRatioList.map(s => s !== 0 ? (s - minRatio) * ((maxVolume) / (maxRatio - minRatio)) : 0);
+
       // 차트가 이미 존재하면 업데이트
       if (chart) {
         // 데이터 갱신
@@ -234,8 +320,8 @@
         chart.data.datasets[1].data = calculateSMA(closePrices, 20);
         chart.data.datasets[2].data = volumes;
         chart.data.datasets[2].backgroundColor = volumeColors;  // 거래량 색상 반영
+        chart.data.datasets[3].data = longRatio;
 
-        // y2 (거래량) 스케일 업데이트
         chart.options.scales.y2.max = Math.max(...volumes) * 5;  // 거래량의 최대값에 5배를 곱해서 표시
         chart.options.plugins.annotation.annotations = supportResistanceLine.map((level, index) => ({
           type: 'line',
@@ -252,7 +338,7 @@
             color: '#FFFFFF',
           }
         }));
-
+        
         chart.update();  // 차트 업데이트
       } else {
         // 차트가 없다면 새로 그리기
@@ -285,7 +371,17 @@
                 backgroundColor: volumeColors,
                 fill: false,
                 yAxisID: 'y2',
-              }
+              },
+              {
+                label: 'LongRatio',
+                data: longRatio,
+                backgroundColor: '#AFBDFF',  // 라인 색상
+                borderColor: '#AFBDFF',      // 선 색상도 설정
+                fill: false,                 // 채우기(false) -> 선만 표시
+                yAxisID: 'y2',
+                borderWidth: 2,              // 선 두께
+                pointRadius: 0,              // 포인트는 보이지 않도록 설정
+              },
             ]
           },
           options: {
