@@ -298,11 +298,10 @@
 
       // 거래량 색상 설정 (기준보다 크면 빨간색, 아니면 기본 색상)
       const volumeColors = volumes.map(volume => volume > volumeThreshold ? '#FF9E56' : '#AFBDFF'); // 기준보다 크면 빨간색, 아니면 파란색
-      
-      const windowSize = 20; // 이동 평균을 계산할 기간
-      const sma = calculateSMA(closePrices, windowSize);
-      const stdDev = calculateStdDev(closePrices, sma, windowSize);
-      const { upperBand, lowerBand } = calculateBollingerBands(closePrices, sma, stdDev);
+
+      const sma = calculateSMA(closePrices, 20);
+      //const stdDev = calculateStdDev(closePrices, sma, windowSize);
+      //const { upperBand, lowerBand } = calculateBollingerBands(closePrices, sma, stdDev);
       const supportResistanceLine = calculateSRLine(highPrices, lowPrices, volumes);
 
       await getLongShortSpecialRatio();
@@ -310,12 +309,18 @@
       const maxRatio = Math.max(...longShortRatioList.filter(s => s !== 0));
       const longRatio = longShortRatioList.map(s => s !== 0 ? (s - minRatio) * ((maxVolume) / (maxRatio - minRatio)) : 0);
 
+      // 마지막 가격을 강조하기 위해 pointRadius 설정
+      const pointRadius = closePrices.map((_, index) => {
+        return index === closePrices.length - 1 ? 3 : 0;  // 마지막 값에만 radius 5 (동그라미), 나머지는 0
+      });
+
       // 차트가 이미 존재하면 업데이트
       if (chart) {
         // 데이터 갱신
         chart.data.labels = labels;
         chart.data.datasets[0].data = closePrices;
-        chart.data.datasets[1].data = calculateSMA(closePrices, 20);
+        chart.data.datasets[0].pointRadius = pointRadius;
+        chart.data.datasets[1].data = sma;
         chart.data.datasets[2].data = volumes;
         chart.data.datasets[2].backgroundColor = volumeColors;  // 거래량 색상 반영
         chart.data.datasets[3].data = longRatio;
@@ -351,15 +356,16 @@
                 data: closePrices,
                 borderColor: '#4bc0c0',
                 fill: false,
-                borderWidth: 2,
-                pointRadius: 0,
+                borderWidth: 1.5,
+                pointRadius: pointRadius,
+                pointBackgroundColor: 'red'
               },
               {
                 label: '중간선 (Middle Band)',
-                data: calculateSMA(closePrices, 20),
+                data: sma,
                 borderColor: '#ffcc00',
                 fill: false,
-                borderWidth: 2,
+                borderWidth: 1.5,
                 pointRadius: 0,
               },
               {
@@ -374,7 +380,7 @@
                 label: 'LongRatio',
                 data: longRatio,
                 backgroundColor: '#AFBDFF',  // 라인 색상
-                borderColor: '#AFBDFF',      // 선 색상도 설정
+                borderColor: '#AF00FF',      // 선 색상도 설정
                 fill: false,                 // 채우기(false) -> 선만 표시
                 yAxisID: 'y2',
                 borderWidth: 2,              // 선 두께
