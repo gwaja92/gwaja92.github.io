@@ -260,7 +260,16 @@
           },
           y2: {
             position: 'right',
-            max: Math.max(...volumes) * 5,
+            max: (function() {
+              const maxVolume = Math.max(...volumes);  // volumes의 최대값
+              const multiplied = maxVolume * 5;  // 그 값에 5를 곱합니다.
+              
+              // 자릿수 계산: 자릿수를 기준으로 첫 자리를 추출하고 나머지는 0으로 만듭니다.
+              const magnitude = Math.pow(10, Math.floor(Math.log10(multiplied)));  // 자릿수 계산
+              const firstDigit = Math.floor(multiplied / magnitude);  // 첫 자릿수
+              
+              return firstDigit * magnitude;  // 첫 자리를 남기고 나머지는 0으로 처리
+            })(),
             grid: { drawOnChartArea: false },
           }
         },
