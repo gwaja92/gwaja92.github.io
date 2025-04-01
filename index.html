@@ -22,7 +22,7 @@
     #chart-container {
       width: 100%;
       margin: 30px auto;
-      padding-right: 20px; /* 오른쪽 마진 추가 */
+      padding-right: 20px;
     }
     #loading {
       text-align: center;
@@ -39,7 +39,7 @@
 </head>
 <body>
   <div id="chart-container">
-    <h1>BTC-USDT 4H</h1>
+    <h1>BTCUSDT 4H</h1>
     <div id="loading">로딩 중...</div>
     <div id="time-controls" style="text-align: center; margin-bottom: 20px;">
       <button class="time-btn" data-interval="5m">5m</button>
@@ -48,7 +48,7 @@
       <button class="time-btn" data-interval="4h">4H</button>
       <button class="time-btn" data-interval="1d">1D</button>
     </div>
-    <div class="price-label" id="current-price">현재 가격: 로딩 중...</div> <!-- 현재 가격 표시 -->
+    <div class="price-label" id="current-price">현재 가격: 로딩 중...</div>
     <div class="chart">
       <canvas id="combinedChart"></canvas>
     </div>
@@ -56,148 +56,60 @@
 
   <script>
     let symbol = 'BTCUSDT';
-    let lsPositCount = 0;
     let currentInterval = '4h';  // 기본 시간 간격 (4시간)
+    let prevInterval = '';
     let dataLimit = 300;
     let longShortRatioList = [];
+    let chart = null;  // chart 변수를 전역으로 선언
+    let lsPositCount = 0;
 
-    async function getTopLongShortPositionRatio() {
-      
-      const url = `https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=${currentInterval}&limit=${dataLimit}`;
-
+    // 데이터 로드 함수
+    async function fetchData(url) {
       try {
-        // Fetch API를 사용하여 Binance API에서 데이터 가져오기
         const response = await fetch(url);
-
-        // 응답 상태가 성공적이면 데이터 반환
         if (response.ok) {
-          const data = await response.json();
-
-          // longAccount 값을 숫자로 변환하여 리스트로 만들기
-          let longAccounts = data.map(item => parseFloat(item.longAccount));
-          
-          // 부족한 길이를 0으로 앞쪽에 채우기
-          longAccounts = new Array(dataLimit - longAccounts.length).fill(0).concat(longAccounts);
-          
-          return longAccounts;
+          return await response.json();
         } else {
-          console.error('Error fetching data: ', response.status);
+          throw new Error('Error fetching data');
         }
       } catch (error) {
-        console.error('Error occurred: ', error);
+        console.error(error);
+        return [];
       }
     }
 
-    async function getTopLongShortAccountRatio() {
-      
-      const url = `https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${symbol}&period=${currentInterval}&limit=${dataLimit}`;
-
-      try {
-        // Fetch API를 사용하여 Binance API에서 데이터 가져오기
-        const response = await fetch(url);
-
-        // 응답 상태가 성공적이면 데이터 반환
-        if (response.ok) {
-          const data = await response.json();
-
-          // longAccount 값을 숫자로 변환하여 리스트로 만들기
-          let longAccounts = data.map(item => parseFloat(item.longAccount));
-          
-          // 부족한 길이를 0으로 앞쪽에 채우기
-          longAccounts = new Array(dataLimit - longAccounts.length).fill(0).concat(longAccounts);
-          
-          return longAccounts;
-        } else {
-          console.error('Error fetching data: ', response.status);
-        }
-      } catch (error) {
-        console.error('Error occurred: ', error);
-      }
-    }
-    
-    async function getLongShortSpecialRatio() {
-      
-      if (lsPositCount == 0 || lsPositCount >= 20) {
-        const longPositions = await getTopLongShortPositionRatio();
-        const longAccounts = await getTopLongShortAccountRatio();
-        
-        let calculateRatio = [];
-        for (let i = 0; i < dataLimit; i++) {
-          const ratio = (longPositions[i] * 0.8) + (longAccounts[i] * 0.2);
-          calculateRatio.push(ratio / (1 - ratio));
-        }
-        longShortRatioList = calculateRatio;
-
-        if (lsPositCount == 0) {
-          lsPositCount++;
-        } else {
-          lsPositCount = 1;
-        }
-      } else {
-        lsPositCount++;
-      }
-
-    }
-    
-    // 시간 버튼 클릭 시 바로 차트 갱신
-    document.querySelectorAll('.time-btn').forEach(button => {
-      button.addEventListener('click', function() {
-        lsPositCount = 0;
-        currentInterval = this.getAttribute('data-interval'); // 버튼의 데이터 속성에서 interval 값 가져오기
-        document.querySelector('h1').textContent = `BTC-USDT ${currentInterval.toUpperCase()}`;
-        document.getElementById('interval-label').innerText = currentInterval.toUpperCase(); // 화면에 표시된 시간 간격 변경
-        drawChart();  // 바로 차트 갱신
-      });
-    });
-
-    // Binance API에서 데이터를 가져오는 함수
+    // Binance API에서 Kline 데이터 가져오기
     async function getKlineData() {
       const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${currentInterval}&limit=${dataLimit}`;
+      const data = await fetchData(url);
 
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
+      const labels = [];
+      const closePrices = [];
+      const highPrices = [];
+      const lowPrices = [];
+      const volumes = [];
 
-        const labels = [];
-        const closePrices = [];
-        const openPrices = [];
-        const highPrices = [];
-        const lowPrices = [];
-        const volumes = [];  // 거래량 데이터 추가
+      data.forEach(item => {
+        const timestamp = new Date(item[0]);
+        const formattedTimestamp = formatDate(timestamp);
+        labels.push(formattedTimestamp);
+        highPrices.push(parseFloat(item[2]));
+        lowPrices.push(parseFloat(item[3]));
+        closePrices.push(parseFloat(item[4]));
+        volumes.push(parseFloat(item[5]));
+      });
 
-        // 봉 데이터를 차트에 맞게 변환
-        data.forEach(item => {
-          const timestamp = new Date(item[0]);
-          const formattedTimestamp = formatDate(timestamp);  // 시간을 yyMMdd HH:mm 형식으로 변환
-          const openPrice = parseFloat(item[1]);
-          const highPrice = parseFloat(item[2]);
-          const lowPrice = parseFloat(item[3]);
-          const closePrice = parseFloat(item[4]);
-          const volume = parseFloat(item[5]);  // 거래량 데이터
-
-          labels.push(formattedTimestamp);
-          openPrices.push(openPrice);
-          highPrices.push(highPrice);
-          lowPrices.push(lowPrice);
-          closePrices.push(closePrice);
-          volumes.push(volume);  // 거래량 추가
-        });
-
-        return { labels, openPrices, highPrices, lowPrices, closePrices, volumes, lastPrice: closePrices[closePrices.length - 1] }; // 마지막 가격도 반환
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        alert('데이터를 가져오는 데 실패했습니다. 다시 시도해 주세요.');
-      }
+      return { labels, highPrices, lowPrices, closePrices, volumes, lastPrice: closePrices[closePrices.length - 1] };
     }
 
     // 시간을 yyMMdd HH:mm 형식으로 변환하는 함수
     function formatDate(date) {
-      const yy = String(date.getFullYear()).slice(-2);  // 년도에서 마지막 2자리
-      const mm = String(date.getMonth() + 1).padStart(2, '0');  // 월
-      const dd = String(date.getDate()).padStart(2, '0');  // 일
-      const hh = String(date.getHours()).padStart(2, '0');  // 시간
-      const min = String(date.getMinutes()).padStart(2, '0');  // 분
-      return `${mm}-${dd} ${hh}H`;
+      const yy = String(date.getFullYear()).slice(-2);
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      const hh = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      return `${mm}-${dd} ${hh}:${min}`;
     }
 
     // 이동 평균을 계산하는 함수
@@ -215,37 +127,46 @@
       return sma;
     }
 
-    // 표준 편차를 계산하는 함수
-    function calculateStdDev(data, sma, windowSize) {
-      let stdDev = [];
-      for (let i = 0; i < data.length; i++) {
-        if (i >= windowSize - 1) {
-          const windowData = data.slice(i - windowSize + 1, i + 1);
-          const mean = sma[i];
-          const squaredDiffs = windowData.map(x => Math.pow(x - mean, 2));
-          const avgSquareDiff = squaredDiffs.reduce((acc, val) => acc + val, 0) / windowSize;
-          stdDev.push(Math.sqrt(avgSquareDiff));
-        } else {
-          stdDev.push(null); // 데이터가 부족하면 null
-        }
-      }
-      return stdDev;
+    // topLongShortPositionRatio
+    async function getLongShortPositionRatio() {
+      const url = `https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=${currentInterval}&limit=${dataLimit}`;
+      const data = await fetchData(url);
+
+      const longPositions = data.map(item => parseFloat(item.longAccount));
+      return new Array(dataLimit - longPositions.length).fill(0).concat(longPositions);  // 부족한 데이터 0으로 채우기
+    }
+    
+    // topLongShortAccountRatio
+    async function getLongShortAccountRatio() {
+      const url = `https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${symbol}&period=${currentInterval}&limit=${dataLimit}`;
+      const data = await fetchData(url);
+
+      const longPositions = data.map(item => parseFloat(item.longAccount));
+      return new Array(dataLimit - longPositions.length).fill(0).concat(longPositions);  // 부족한 데이터 0으로 채우기
     }
 
-    // 볼린저 밴드를 계산하는 함수
-    function calculateBollingerBands(closePrices, sma, stdDev, multiplier = 2.1) {  // multiplier를 2.1로 변경
-      let upperBand = [];
-      let lowerBand = [];
-      for (let i = 0; i < closePrices.length; i++) {
-        if (sma[i] !== null && stdDev[i] !== null) {
-          upperBand.push(sma[i] + (stdDev[i] * multiplier));
-          lowerBand.push(sma[i] - (stdDev[i] * multiplier));
-        } else {
-          upperBand.push(null);
-          lowerBand.push(null);
+    // Long/Short 비율 계산
+    async function calculateLongShortRatio() {
+      
+      if (lsPositCount == 0 || lsPositCount >= 20) {
+        const longPositions = await getLongShortPositionRatio();
+        const longAccounts = await getLongShortAccountRatio();
+        
+        let calculateRatio = [];
+        for (let i = 0; i < dataLimit; i++) {
+          const ratio = (longPositions[i] * 0.8) + (longAccounts[i] * 0.2);
+          calculateRatio.push(ratio / (1 - ratio));
         }
+        longShortRatioList = calculateRatio;
+
+        if (lsPositCount == 0) {
+          lsPositCount++;
+        } else {
+          lsPositCount = 1;
+        }
+      } else {
+        lsPositCount++;
       }
-      return { upperBand, lowerBand };
     }
 
     // 저항과 지지를 그리는 함수
@@ -283,163 +204,147 @@
       priceLines.sort((a, b) => b[1] - a[1]);
 
       return priceLines.slice(0, num).map(line => line[0]);  // 상위 num개의 저항선/지지선만 추출
+    }    
+
+    // 차트 데이터 생성
+    function createChartData(labels, closePrices, volumes, longRatio) {
+      return {
+        labels: labels,
+        datasets: [
+          {
+            label: 'BTC/USDT',
+            data: closePrices,
+            borderColor: '#4bc0c0',
+            fill: false,
+            borderWidth: 1.5,
+            pointRadius: closePrices.map((_, index) => index === closePrices.length - 1 ? 3 : 0),
+            pointBackgroundColor: 'red'
+          },
+          {
+            label: '중간선 (Middle Band)',
+            data: calculateSMA(closePrices, 20),
+            borderColor: '#ffcc00',
+            fill: false,
+            borderWidth: 1.5,
+            pointRadius: 0,
+          },
+          {
+            label: '거래량',
+            data: volumes,
+            type: 'bar',
+            backgroundColor: volumes.map(volume => volume > (volumes.reduce((acc, val) => acc + val, 0) / volumes.length) * 2.5 ? '#FF9E56' : '#AFBDFF'),
+            fill: false,
+            yAxisID: 'y2',
+          },
+          {
+            label: 'LongRatio',
+            data: longRatio,
+            backgroundColor: '#AFBDFF',
+            borderColor: '#AF00FF',
+            fill: false,
+            yAxisID: 'y2',
+            borderWidth: 1.5,
+            pointRadius: 0,
+          },
+        ]
+      };
     }
 
-    let chart = null;  // 차트 객체를 저장
+    // 차트 옵션 생성
+    function createChartOptions(closePrices, volumes, supportResistanceLine, duration) {
+      return {
+        scales: {
+          y: {
+            beginAtZero: false,
+            title: { display: false, text: '가격 (USDT)' },
+          },
+          y2: {
+            position: 'right',
+            max: Math.max(...volumes) * 5,
+            grid: { drawOnChartArea: false },
+          }
+        },
+        responsive: true,
+        maintainAspectRatio: false,
+        aspectRatio: 1,
+        plugins: {
+          legend: { display: false },
+          annotation: {
+            annotations: [
+              // 기존의 지지선/저항선 라인
+              ...supportResistanceLine.map((level, index) => ({
+                type: 'line',
+                mode: 'horizontal',
+                scaleID: 'y',
+                value: level,
+                borderColor: 'rgba(255, 0, 0, 0.005)',
+                borderWidth: 2,
+              })),
+              // 현재 가격 라인 추가 (점선 스타일로 설정)
+              {
+                type: 'line',
+                mode: 'horizontal',
+                scaleID: 'y',
+                value: closePrices[closePrices.length - 1],  // 현재 가격
+                borderColor: 'blue',   // 선 색상
+                borderWidth: 1,
+                borderDash: [2, 10],  // 점선 스타일 (5px 선, 5px 간격)
+              }
+            ]
+          }
+        },
+        animation: { duration: duration }
+      };
+    }
 
     // 차트를 그리는 함수
     async function drawChart() {
-      const { labels, openPrices, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData();
-
-      // 거래량 기준 값 설정
-      const averageVolume = volumes.reduce((sum, volume) => sum + volume, 0) / volumes.length;
-      const volumeThreshold = averageVolume * 2.5;
-      const maxVolume = Math.max(...volumes);
-
-      // 거래량 색상 설정 (기준보다 크면 빨간색, 아니면 기본 색상)
-      const volumeColors = volumes.map(volume => volume > volumeThreshold ? '#FF9E56' : '#AFBDFF'); // 기준보다 크면 빨간색, 아니면 파란색
-
-      const sma = calculateSMA(closePrices, 20);
-      //const stdDev = calculateStdDev(closePrices, sma, windowSize);
-      //const { upperBand, lowerBand } = calculateBollingerBands(closePrices, sma, stdDev);
-      const supportResistanceLine = calculateSRLine(highPrices, lowPrices, volumes);
-
-      await getLongShortSpecialRatio();
+      const { labels, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData();
+      
+      await calculateLongShortRatio();
       const minRatio = Math.min(...longShortRatioList.filter(s => s !== 0));
       const maxRatio = Math.max(...longShortRatioList.filter(s => s !== 0));
-      const longRatio = longShortRatioList.map(s => s !== 0 ? (s - minRatio) * ((maxVolume) / (maxRatio - minRatio)) : 0);
+      const longRatio = longShortRatioList.map(s => s !== 0 ? (s - minRatio) * ((Math.max(...volumes)) / (maxRatio - minRatio)) : 0);
+      
+      const supportResistanceLine = calculateSRLine(highPrices, lowPrices, volumes);
 
-      // 마지막 가격을 강조하기 위해 pointRadius 설정
-      const pointRadius = closePrices.map((_, index) => {
-        return index === closePrices.length - 1 ? 3 : 0;  // 마지막 값에만 radius 5 (동그라미), 나머지는 0
-      });
+      let duration = (currentInterval !== prevInterval) ? 1000 : 0;
+      prevInterval = currentInterval;
+      
+      const chartData = createChartData(labels, closePrices, volumes, longRatio);
+      const chartOptions = createChartOptions(closePrices, volumes, supportResistanceLine, duration);
 
       // 차트가 이미 존재하면 업데이트
       if (chart) {
-        // 데이터 갱신
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = closePrices;
-        chart.data.datasets[0].pointRadius = pointRadius;
-        chart.data.datasets[1].data = sma;
-        chart.data.datasets[2].data = volumes;
-        chart.data.datasets[2].backgroundColor = volumeColors;  // 거래량 색상 반영
-        chart.data.datasets[3].data = longRatio;
-
-        chart.options.scales.y2.max = Math.max(...volumes) * 5;  // 거래량의 최대값에 5배를 곱해서 표시
-        chart.options.plugins.annotation.annotations = supportResistanceLine.map((level, index) => ({
-          type: 'line',
-          mode: 'horizontal',
-          scaleID: 'y',
-          value: level,
-          borderColor: 'rgba(255, 0, 0, 0.005)',
-          borderWidth: 2,
-          label: {
-            content: `Level ${index + 1}`,
-            enabled: true,
-            position: 'center',
-            font: { size: 10, weight: 'bold' },
-            color: '#FFFFFF',
-          }
-        }));
-        
-        chart.update();  // 차트 업데이트
+        chart.data = chartData;
+        chart.options = chartOptions;
+        chart.update();
       } else {
-        // 차트가 없다면 새로 그리기
-        let ctx = document.getElementById('combinedChart').getContext('2d');
+        const ctx = document.getElementById('combinedChart').getContext('2d');
         chart = new Chart(ctx, {
           type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: 'BTC/USDT',
-                data: closePrices,
-                borderColor: '#4bc0c0',
-                fill: false,
-                borderWidth: 1.5,
-                pointRadius: pointRadius,
-                pointBackgroundColor: 'red'
-              },
-              {
-                label: '중간선 (Middle Band)',
-                data: sma,
-                borderColor: '#ffcc00',
-                fill: false,
-                borderWidth: 1.5,
-                pointRadius: 0,
-              },
-              {
-                label: '거래량',
-                data: volumes,
-                type: 'bar',
-                backgroundColor: volumeColors,
-                fill: false,
-                yAxisID: 'y2',
-              },
-              {
-                label: 'LongRatio',
-                data: longRatio,
-                backgroundColor: '#AFBDFF',  // 라인 색상
-                borderColor: '#AF00FF',      // 선 색상도 설정
-                fill: false,                 // 채우기(false) -> 선만 표시
-                yAxisID: 'y2',
-                borderWidth: 1.5,              // 선 두께
-                pointRadius: 0,              // 포인트는 보이지 않도록 설정
-              },
-            ]
-          },
-          options: {
-            scales: {
-              y: {
-                beginAtZero: false,
-                title: { display: false, text: '가격 (USDT)' },
-              },
-              y2: {
-                position: 'right',
-                max : Math.max(...volumes) * 5,
-                grid: {
-                  drawOnChartArea: false,  // y2 그리드 라인 없애기
-                },
-              }
-            },
-            responsive: true,
-            maintainAspectRatio: false,
-            aspectRatio: 1,
-            plugins: {
-              legend: { display: false },
-              annotation: {
-                annotations: calculateSRLine(highPrices, lowPrices, volumes).map((level, index) => ({
-                  type: 'line',
-                  mode: 'horizontal',
-                  scaleID: 'y',
-                  value: level,
-                  borderColor: 'rgba(255, 0, 0, 0.005)',
-                  borderWidth: 2,
-                  label: {
-                    content: `Level ${index + 1}`,
-                    enabled: true,
-                    position: 'center',
-                    font: { size: 10, weight: 'bold' },
-                    color: '#FFFFFF',
-                  }
-                }))
-              }
-            },
-            animation: { duration: 1000 }
-          }
+          data: chartData,
+          options: chartOptions
         });
       }
 
-      // 현재 가격 표시
       document.getElementById('current-price').innerText = `Current Price : ${lastPrice.toFixed(2)} USDT`;
-
-      // 로딩 메시지 숨기기
-      document.getElementById('loading').style.display = 'none';
+      document.getElementById('loading').style.display = 'none';  // 로딩 메시지 숨기기
     }
 
-    // 페이지 로드 시 차트를 그리기
+    // 시간 버튼 클릭 시 차트 갱신
+    document.querySelectorAll('.time-btn').forEach(button => {
+      button.addEventListener('click', function() {
+        currentInterval = this.getAttribute('data-interval');
+        document.querySelector('h1').textContent = `${symbol} ${currentInterval.toUpperCase()}`;
+        lsPositCount = 0;
+        drawChart();  // 시간 간격 변경 시 차트 갱신
+      });
+    });
+
+    // 페이지 로드 시 첫 차트 그리기
     window.onload = function() {
-      drawChart();  // 첫 번째로 차트를 그리기
+      drawChart();
       setInterval(drawChart, 3000);  // 3초마다 차트 갱신
     };
   </script>
