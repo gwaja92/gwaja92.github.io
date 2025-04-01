@@ -250,8 +250,17 @@
       };
     }
 
+    function getFirstDigit (value) {
+      const magnitude = Math.pow(10, Math.floor(Math.log10(value)));  // 자릿수 계산
+      const firstDigit = Math.floor(value / magnitude);  // 첫 자릿수
+      return firstDigit * magnitude;  // 첫 자리를 남기고 나머지는 0으로 처리
+    }
+
     // 차트 옵션 생성
-    function createChartOptions(closePrices, volumes, supportResistanceLine, duration) {
+    function createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, duration) {
+      
+      const highPrice = Math.max(...highPrices);
+      const lowPrice = Math.min(...lowPrices);
       return {
         scales: {
           y: {
@@ -260,16 +269,7 @@
           },
           y2: {
             position: 'right',
-            max: (function() {
-              const maxVolume = Math.max(...volumes);  // volumes의 최대값
-              const multiplied = maxVolume * 5;  // 그 값에 5를 곱합니다.
-              
-              // 자릿수 계산: 자릿수를 기준으로 첫 자리를 추출하고 나머지는 0으로 만듭니다.
-              const magnitude = Math.pow(10, Math.floor(Math.log10(multiplied)));  // 자릿수 계산
-              const firstDigit = Math.floor(multiplied / magnitude);  // 첫 자릿수
-              
-              return firstDigit * magnitude;  // 첫 자리를 남기고 나머지는 0으로 처리
-            })(),
+            max: getFirstDigit(Math.max(...volumes)*5),
             grid: { drawOnChartArea: false },
           }
         },
@@ -321,7 +321,7 @@
       prevInterval = currentInterval;
       
       const chartData = createChartData(labels, closePrices, volumes, longRatio);
-      const chartOptions = createChartOptions(closePrices, volumes, supportResistanceLine, duration);
+      const chartOptions = createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, duration);
 
       // 차트가 이미 존재하면 업데이트
       if (chart) {
@@ -337,7 +337,7 @@
         });
       }
 
-      document.getElementById('current-price').innerText = `Current Price : ${lastPrice.toFixed(2)} USDT`;
+      document.getElementById('current-price').innerText = `Current Price : ${lastPrice} USDT`;
       document.getElementById('loading').style.display = 'none';  // 로딩 메시지 숨기기
     }
 
