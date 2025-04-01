@@ -259,23 +259,29 @@
     // 차트 옵션 생성
     function createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, duration) {
       
-      const highPrice = Math.max(...highPrices);
-      const lowPrice = Math.min(...lowPrices);
+      const highPrice = Math.max(...closePrices);
+      const lowPrice = Math.min(...closePrices);
+      const highLowGab = highPrice - lowPrice;
+      const maxVal = highPrice + highLowGab/6;
+      const minVal = lowPrice - highLowGab/4;
+
       return {
         scales: {
           y: {
             beginAtZero: false,
             title: { display: false, text: '가격 (USDT)' },
+            max: Math.floor(maxVal / 100) * 100,
+            min: Math.floor(minVal / 100) * 100,
           },
           y2: {
             position: 'right',
-            max: getFirstDigit(Math.max(...volumes)*5),
+            max: getFirstDigit(Math.max(...volumes)*7),
             grid: { drawOnChartArea: false },
           }
         },
         responsive: true,
         maintainAspectRatio: false,
-        aspectRatio: 1,
+        aspectRatio: 0.6,
         plugins: {
           legend: { display: false },
           annotation: {
