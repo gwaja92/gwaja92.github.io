@@ -34,7 +34,13 @@
       font-weight: bold;
       color: #4bc0c0;
       text-align: center;
-    }    
+    }
+    .line-label {
+      font-size: 15px;
+      font-weight: bold;
+      color: #4bc0c0;
+      text-align: center;
+    }     
   </style>
 </head>
 <body>
@@ -49,7 +55,7 @@
       <button class="time-btn" data-interval="1d">1D</button>
     </div>
     <div class="price-label" id="current-price">Curret Price loading...</div>
-    <div class="price-label" id="important-line">Important line loading...</div>
+    <div class="line-label" id="important-line">Important line loading...</div>
     <div class="chart">
       <canvas id="combinedChart"></canvas>
     </div>
@@ -434,8 +440,8 @@
       criticalLine[criticalLine.indexOf(lastPrice)] = '[current Price]';
 
 
-      document.getElementById('current-price').innerText = `Current Price: ${lastPrice.toFixed(1)} Long Rate: ${(lastRatio/(lastRatio + 1)*100).toFixed(1)}%`;
-      document.getElementById('important-line').innerText = `Important Line: ${criticalLine.join('   ')}`;
+      document.getElementById('current-price').innerText = `Price: ${lastPrice.toFixed(1)} Long: ${(lastRatio/(lastRatio + 1)*100).toFixed(1)}%`;
+      document.getElementById('important-line').innerText = `${criticalLine.join('   ')}`;
       document.getElementById('loading').style.display = 'none';  // 로딩 메시지 숨기기
     }
 
