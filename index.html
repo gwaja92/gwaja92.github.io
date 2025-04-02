@@ -34,7 +34,7 @@
       font-weight: bold;
       color: #4bc0c0;
       text-align: center;
-    }
+    }    
   </style>
 </head>
 <body>
@@ -48,7 +48,8 @@
       <button class="time-btn" data-interval="4h">4H</button>
       <button class="time-btn" data-interval="1d">1D</button>
     </div>
-    <div class="price-label" id="current-price">현재 가격: 로딩 중...</div>
+    <div class="price-label" id="current-price">Curret Price loading...</div>
+    <div class="price-label" id="important-line">Important line loading...</div>
     <div class="chart">
       <canvas id="combinedChart"></canvas>
     </div>
@@ -79,7 +80,7 @@
     }
 
     // Binance API에서 Kline 데이터 가져오기
-    async function getKlineData() {
+    async function getKlineData(currentInterval, dataLimit) {
       const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${currentInterval}&limit=${dataLimit}`;
       const data = await fetchData(url);
 
@@ -203,7 +204,7 @@
       // num개만 필요하므로, 필요한 부분만 정렬
       priceLines.sort((a, b) => b[1] - a[1]);
 
-      return priceLines.slice(0, num).map(line => line[0]);  // 상위 num개의 저항선/지지선만 추출
+      return priceLines.slice(0, num).map(line => line[0]).sort();  // 상위 num개의 저항선/지지선만 추출
     }    
 
     // 차트 데이터 생성
@@ -312,16 +313,101 @@
       };
     }
 
+    async function getDetailSRLine() {
+      
+      let localInterval = '';
+      let localLimit = 0;
+
+      switch(currentInterval) {
+        case "5m" :
+          localInterval = "1m";
+          localLimit = dataLimit * 5;
+          break;
+
+        case "15m" :
+          localInterval = "5m";
+          localLimit = dataLimit * 3;
+          break;
+
+        case "1h" :
+          localInterval = "30m";
+          localLimit = dataLimit * 2;
+          break;
+        
+        case "4h" :
+          localInterval = "1h";
+          localLimit = dataLimit * 4;
+          break;
+        
+        case "1d" :
+          localInterval = "12h";
+          localLimit = dataLimit * 2;
+          break;
+      }
+
+      const { highPrices, lowPrices, volumes} = await getKlineData(localInterval, localLimit);
+      return calculateSRLine(highPrices, lowPrices, volumes);
+    }
+    
+    function getCriticalLine(supportResistanceLine, priceRange) {
+      const result = []; // 그룹을 저장할 배열
+      const tolerance = priceRange * 0.02; // 1% 범위
+
+      let currentGroup = []; // 현재 그룹
+
+      for (let i = 0; i < supportResistanceLine.length; i++) {
+          const currentPrice = supportResistanceLine[i];
+
+          // 만약 currentGroup이 비어있으면 첫 번째 숫자부터 그룹 시작
+          if (currentGroup.length === 0) {
+              currentGroup.push(currentPrice);
+          } else {
+              const lastPriceInGroup = currentGroup[currentGroup.length - 1];
+
+              // 현재 가격과 그룹의 마지막 가격의 차이가 tolerance 범위 이내이면 같은 그룹에 추가
+              if (Math.abs(currentPrice - lastPriceInGroup) <= tolerance) {
+                  currentGroup.push(currentPrice);
+              } else {
+                  // 범위를 벗어나면 기존 그룹을 결과 배열에 넣고 새로운 그룹 시작
+                  result.push(currentGroup);
+                  currentGroup = [currentPrice];
+              }
+          }
+      }
+
+      // 마지막 그룹이 남아있으면 결과 배열에 추가
+      if (currentGroup.length > 0) {
+          result.push(currentGroup);
+      }
+    
+      const criticalResult = [];
+      for (let i = 0; i < result.length; i++) {
+        const array = result[i];
+        const minVal = array[0];
+        const maxVal = array[array.length-1];
+        if (maxVal - minVal < tolerance) {
+          criticalResult.push(minVal + (maxVal-minVal)/2);
+        } else {
+          criticalResult.push(minVal);
+          criticalResult.push(maxVal);
+        }
+      }
+      return criticalResult.map(s => Math.floor(s/10)*10);
+
+    }
+
     // 차트를 그리는 함수
     async function drawChart() {
-      const { labels, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData();
+      const { labels, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData(currentInterval, dataLimit);
       
       await calculateLongShortRatio();
+      const lastRatio = longShortRatioList[longShortRatioList.length-1];
       const minRatio = Math.min(...longShortRatioList.filter(s => s !== 0));
       const maxRatio = Math.max(...longShortRatioList.filter(s => s !== 0));
       const longRatio = longShortRatioList.map(s => s !== 0 ? (s - minRatio) * ((Math.max(...volumes)) / (maxRatio - minRatio)) : 0);
       
-      const supportResistanceLine = calculateSRLine(highPrices, lowPrices, volumes);
+      const supportResistanceLine = await getDetailSRLine();
+      const criticalLine = getCriticalLine(supportResistanceLine, Math.max(...highPrices)-Math.min(...lowPrices));
 
       let duration = (currentInterval !== prevInterval) ? 1000 : 0;
       prevInterval = currentInterval;
@@ -342,8 +428,14 @@
           options: chartOptions
         });
       }
+      
+      criticalLine.push(lastPrice);
+      criticalLine.sort();
+      criticalLine[criticalLine.indexOf(lastPrice)] = '[current Price]';
 
-      document.getElementById('current-price').innerText = `Current Price : ${lastPrice} USDT`;
+
+      document.getElementById('current-price').innerText = `Current Price: ${lastPrice.toFixed(1)} Long Rate: ${(lastRatio/(lastRatio + 1)*100).toFixed(1)}%`;
+      document.getElementById('important-line').innerText = `Important Line: ${criticalLine.join('   ')}`;
       document.getElementById('loading').style.display = 'none';  // 로딩 메시지 숨기기
     }
 
