@@ -437,8 +437,7 @@
       
       criticalLine.push(lastPrice);
       criticalLine.sort();
-      criticalLine[criticalLine.indexOf(lastPrice)] = '[current Price]';
-
+      criticalLine[criticalLine.indexOf(lastPrice)] = '[current]';
 
       document.getElementById('current-price').innerText = `Price: ${lastPrice.toFixed(1)} Long: ${(lastRatio/(lastRatio + 1)*100).toFixed(1)}%`;
       document.getElementById('important-line').innerText = `${criticalLine.join('   ')}`;
