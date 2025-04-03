@@ -15,9 +15,9 @@
       padding: 0;
     }
     h1 {
-      text-align: center;
-      margin-top: 20px;
-      color: #333;
+      font-size: 24px; /* 원하는 폰트 크기 설정 */
+      margin: 8; /* 상단 여백 제거 */
+      text-align: center; /* 중앙 정렬 */
     }
     #chart-container {
       width: 100%;
@@ -40,7 +40,11 @@
       font-weight: bold;
       color: #4bc0c0;
       text-align: center;
-    }     
+    }
+    .highlight {
+      color: red;  /* 'P'를 빨간색으로 */
+      font-size: 15px;  /* 글자 크기 변경 */
+    }
   </style>
 </head>
 <body>
@@ -392,13 +396,13 @@
         const minVal = array[0];
         const maxVal = array[array.length-1];
         if (maxVal - minVal < tolerance) {
-          criticalResult.push(minVal + (maxVal-minVal)/2);
+          criticalResult.push(Math.floor((minVal + (maxVal-minVal)/2)/10)*10);
         } else {
-          criticalResult.push(minVal);
-          criticalResult.push(maxVal);
+          criticalResult.push('[' + Math.floor(minVal / 10) * 10);
+          criticalResult.push(Math.floor(maxVal/10)*10 + ']');
         }
       }
-      return criticalResult.map(s => Math.floor(s/10)*10);
+      return criticalResult;
 
     }
 
@@ -436,11 +440,19 @@
       }
       
       criticalLine.push(lastPrice);
-      criticalLine.sort();
-      criticalLine[criticalLine.indexOf(lastPrice)] = '[current]';
+      criticalLine.sort((a, b) => {
+        // a와 b가 숫자인지, 문자열인지 확인
+        const numA = typeof a === 'number' ? a : parseFloat(a.replace(/[^\d.]/g, ''));
+        const numB = typeof b === 'number' ? b : parseFloat(b.replace(/[^\d.]/g, ''));
 
-      document.getElementById('current-price').innerText = `Price: ${lastPrice.toFixed(1)} Long: ${(lastRatio/(lastRatio + 1)*100).toFixed(1)}%`;
-      document.getElementById('important-line').innerText = `${criticalLine.join('   ')}`;
+        // 숫자를 기준으로 오름차순 정렬
+        return numA - numB;
+      });
+
+      criticalLine[criticalLine.indexOf(lastPrice)] = '<span class="highlight">(P)</span>';
+
+      document.getElementById('current-price').innerText = `Price: ${lastPrice.toFixed(1)} Long: ${(lastRatio/(lastRatio + 1)*100).toFixed(1)}% [${lastRatio.toFixed(2)}]`;
+      document.getElementById('important-line').innerHTML = `${criticalLine.join('   ')}`;
       document.getElementById('loading').style.display = 'none';  // 로딩 메시지 숨기기
     }
 
