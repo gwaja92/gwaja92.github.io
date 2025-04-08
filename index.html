@@ -261,10 +261,14 @@
       };
     }
 
-    function getFirstDigit (value) {
-      const magnitude = Math.pow(10, Math.floor(Math.log10(value)));  // 자릿수 계산
-      const firstDigit = Math.floor(value / magnitude);  // 첫 자릿수
-      return firstDigit * magnitude;  // 첫 자리를 남기고 나머지는 0으로 처리
+    function getFirstTwoDigits(value) {
+      if (value < 100) return value;  // 두 자릿수 이하라면 그대로 반환
+
+      const logValue = Math.log10(value);  // 값의 로그를 구함
+      const magnitude = Math.pow(10, Math.floor(logValue) - 1);  // 두 자릿수를 남기기 위한 자릿수 계산
+      const firstTwoDigits = Math.floor(value / magnitude);  // 첫 두 자릿수 구하기
+
+      return firstTwoDigits * magnitude;  // 첫 두 자리를 남기고 나머지는 0으로 처리
     }
 
     // 차트 옵션 생성
@@ -286,7 +290,7 @@
           },
           y2: {
             position: 'right',
-            max: getFirstDigit(Math.max(...volumes)*7),
+            max: getFirstTwoDigits(Math.max(...volumes)*7),
             grid: { drawOnChartArea: false },
           }
         },
@@ -340,8 +344,8 @@
           break;
 
         case "1h" :
-          localInterval = "30m";
-          localLimit = dataLimit * 2;
+          localInterval = "15m";
+          localLimit = dataLimit * 4;
           break;
         
         case "4h" :
@@ -350,8 +354,8 @@
           break;
         
         case "1d" :
-          localInterval = "12h";
-          localLimit = dataLimit * 2;
+          localInterval = "6h";
+          localLimit = dataLimit * 4;
           break;
       }
 
