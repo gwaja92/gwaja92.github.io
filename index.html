@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Binance BTC/USDT 차트</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
   <style>
     body {
@@ -125,15 +124,12 @@
 
     // 이동 평균을 계산하는 함수
     function calculateSMA(data, windowSize) {
-      let sma = [];
+      let sma = new Array(data.length).fill(null);
+      let sum = 0;
       for (let i = 0; i < data.length; i++) {
-        if (i >= windowSize - 1) {
-          const windowData = data.slice(i - windowSize + 1, i + 1);
-          const sum = windowData.reduce((acc, val) => acc + val, 0);
-          sma.push(sum / windowSize);
-        } else {
-          sma.push(null); // 데이터가 부족하면 null
-        }
+        sum += data[i];
+        if (i >= windowSize) sum -= data[i - windowSize];
+        if (i >= windowSize - 1) sma[i] = sum / windowSize;
       }
       return sma;
     }
@@ -160,8 +156,7 @@
     async function calculateLongShortRatio() {
       
       if (lsPositCount == 0 || lsPositCount >= 20) {
-        const longPositions = await getLongShortPositionRatio();
-        const longAccounts = await getLongShortAccountRatio();
+        const [longPositions, longAccounts] = await Promise.all([getLongShortPositionRatio(), getLongShortAccountRatio()]);
         
         let calculateRatio = [];
         for (let i = 0; i < dataLimit; i++) {
@@ -182,8 +177,13 @@
 
     // 저항과 지지를 그리는 함수
     function calculateSRLine(highPrices, lowPrices, volumes, div = 10000, num = 1000) { // 저항 지지선 divider, 저항선 뽑는 개수 
-      let highPrice = Math.max(...highPrices);  // 최대값 계산 최적화
-      let lowPrice = Math.min(...lowPrices);   // 최소값 계산 최적화
+      let highPrice = -Infinity;  // 최댓값을 찾는 반복문 최적화
+      let lowPrice = Infinity;    // 최솟값을 찾는 반복문 최적화
+
+      for (let i = 0; i < highPrices.length; i++) {
+        highPrice = Math.max(highPrice, highPrices[i]);
+        lowPrice = Math.min(lowPrice, lowPrices[i]);
+      }
 
       let priceLines = [];
       for (let i = 0; i <= div; i++) {
@@ -219,6 +219,9 @@
 
     // 차트 데이터 생성
     function createChartData(labels, closePrices, volumes, longRatio) {
+
+      const avgVolume = volumes.reduce((acc, val) => acc + val, 0) / volumes.length;
+
       return {
         labels: labels,
         datasets: [
@@ -243,7 +246,7 @@
             label: '거래량',
             data: volumes,
             type: 'bar',
-            backgroundColor: volumes.map(volume => volume > (volumes.reduce((acc, val) => acc + val, 0) / volumes.length) * 2.5 ? '#FF9E56' : '#AFBDFF'),
+            backgroundColor: volumes.map(volume => volume > avgVolume * 2.5 ? '#FF9E56' : '#AFBDFF'),
             fill: false,
             yAxisID: 'y2',
           },
@@ -337,8 +340,8 @@
 
       switch(currentInterval) {
         case "5m" :
-          localInterval = "1m";
-          localLimit = dataLimit * 5;
+          localInterval = "3m";
+          localLimit = dataLimit * 5 / 3;
           break;
 
         case "15m" :
@@ -415,7 +418,12 @@
 
     // 차트를 그리는 함수
     async function drawChart() {
-      const { labels, highPrices, lowPrices, closePrices, volumes, lastPrice } = await getKlineData(currentInterval, dataLimit);
+      
+      const [klineData, srLine] = await Promise.all([
+        getKlineData(currentInterval, dataLimit),   // getKlineData
+        getDetailSRLine(),                          // getDetailSRLine
+      ]);
+      const { labels, highPrices, lowPrices, closePrices, volumes, lastPrice } = klineData;
       
       await calculateLongShortRatio();
       const lastRatio = longShortRatioList[longShortRatioList.length-1];
@@ -423,7 +431,7 @@
       const maxRatio = Math.max(...longShortRatioList.filter(s => s !== 0));
       const longRatio = longShortRatioList.map(s => s !== 0 ? (s - minRatio) * ((Math.max(...volumes)) / (maxRatio - minRatio)) : 0);
       
-      const supportResistanceLine = await getDetailSRLine();
+      const supportResistanceLine = srLine;
       const criticalLine = getCriticalLine(supportResistanceLine, Math.max(...highPrices)-Math.min(...lowPrices));
 
       let duration = (currentInterval !== prevInterval) ? 1000 : 0;
@@ -463,20 +471,42 @@
       document.getElementById('loading').style.display = 'none';  // 로딩 메시지 숨기기
     }
 
+    let lock = false;  // 스핀락 변수
+
+    function getSpinlock() {
+      while (lock) {
+      }
+      lock = true;  // 락 획득
+    }
+
+    function releaseSpinlock() {
+      lock = false;  // 락 해제
+    }
+
     // 시간 버튼 클릭 시 차트 갱신
     document.querySelectorAll('.time-btn').forEach(button => {
       button.addEventListener('click', function() {
         currentInterval = this.getAttribute('data-interval');
         document.querySelector('h1').textContent = `${symbol} ${currentInterval.toUpperCase()}`;
         lsPositCount = 0;
+        getSpinlock();
         drawChart();  // 시간 간격 변경 시 차트 갱신
+        releaseSpinlock();
       });
     });
 
     // 페이지 로드 시 첫 차트 그리기
     window.onload = function() {
+      getSpinlock();
       drawChart();
-      setInterval(drawChart, 3000);  // 3초마다 차트 갱신
+      releaseSpinlock();
+
+      // 3초마다 차트 갱신
+      setInterval(() => {
+        getSpinlock();  // 3초마다 차트 갱신 전에 스핀락 획득
+        drawChart();  // 차트 갱신 작업 실행
+        releaseSpinlock();  // 차트 갱신 후 스핀락 해제
+      }, 3000);
     };
   </script>
 </body>
