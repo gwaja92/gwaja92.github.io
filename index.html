@@ -261,14 +261,14 @@
       };
     }
 
-    function getFirstTwoDigits(value) {
-      if (value < 100) return value;  // 두 자릿수 이하라면 그대로 반환
+    function getFirstNDigits(value, powVal) {
+      if (value < Math.pow(10, powVal)) return value;  // powVal 자릿수 이하라면 그대로 반환
 
       const logValue = Math.log10(value);  // 값의 로그를 구함
-      const magnitude = Math.pow(10, Math.floor(logValue) - 1);  // 두 자릿수를 남기기 위한 자릿수 계산
-      const firstTwoDigits = Math.floor(value / magnitude);  // 첫 두 자릿수 구하기
+      const magnitude = Math.pow(10, Math.floor(logValue) - powVal + 1);  // 앞 자릿수를 남기기 위한 자릿수 계산
+      const firstNDigits = Math.floor(value / magnitude);  // 첫 N 자릿수 구하기
 
-      return firstTwoDigits * magnitude;  // 첫 두 자리를 남기고 나머지는 0으로 처리
+      return firstNDigits * magnitude;  // 첫 N 자리를 남기고 나머지는 0으로 처리
     }
 
     // 차트 옵션 생성
@@ -282,15 +282,18 @@
 
       return {
         scales: {
+          x: {
+            grid: { display: false }
+          },
           y: {
             beginAtZero: false,
             title: { display: false, text: '가격 (USDT)' },
-            max: Math.floor(maxVal / 100) * 100,
-            min: Math.floor(minVal / 100) * 100,
+            max: getFirstNDigits(maxVal, 3),
+            min: getFirstNDigits(minVal, 3),
           },
           y2: {
             position: 'right',
-            max: getFirstTwoDigits(Math.max(...volumes)*7),
+            max: getFirstNDigits(Math.max(...volumes)*7, 2),
             grid: { drawOnChartArea: false },
           }
         },
