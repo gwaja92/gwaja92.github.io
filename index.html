@@ -176,7 +176,7 @@
     }
 
     // 저항과 지지를 그리는 함수
-    function calculateSRLine(highPrices, lowPrices, volumes, div = 10000, num = 1000) { // 저항 지지선 divider, 저항선 뽑는 개수 
+    function calculateSRLine(highPrices, lowPrices, volumes, div = 10000, percentage = 10) { // 저항 지지선 divider, 저항선 뽑는 개수 
       let highPrice = -Infinity;  // 최댓값을 찾는 반복문 최적화
       let lowPrice = Infinity;    // 최솟값을 찾는 반복문 최적화
 
@@ -210,11 +210,21 @@
           priceLines[j][1] += partialVolume;
         }
       }
-      
-      // num개만 필요하므로, 필요한 부분만 정렬
-      priceLines.sort((a, b) => b[1] - a[1]);
 
-      return priceLines.slice(0, num).map(line => line[0]).sort();  // 상위 num개의 저항선/지지선만 추출
+      let map = new Map();
+      for (let i = 0; i <= div; i++) {
+        const price = getFirstNDigits(priceLines[i][0], 4);
+        if (!map.has(price)) {
+          map.set(price, priceLines[i][1]);
+        } else {
+          map.set(price, map.get(price) + priceLines[i][1]);
+        }
+      }
+      
+      let sortedArray = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+      let sortedMap = new Map(sortedArray);
+      
+      return Array.from(sortedMap.keys()).slice(0, Math.floor(sortedMap.size * (percentage / 100))).sort();
     }    
 
     // 차트 데이터 생성
@@ -265,13 +275,15 @@
     }
 
     function getFirstNDigits(value, powVal) {
-      if (value < Math.pow(10, powVal)) return value;  // powVal 자릿수 이하라면 그대로 반환
+
+      const mulVal = 1000000;
+      value = value * mulVal;
 
       const logValue = Math.log10(value);  // 값의 로그를 구함
       const magnitude = Math.pow(10, Math.floor(logValue) - powVal + 1);  // 앞 자릿수를 남기기 위한 자릿수 계산
       const firstNDigits = Math.floor(value / magnitude);  // 첫 N 자릿수 구하기
 
-      return firstNDigits * magnitude;  // 첫 N 자리를 남기고 나머지는 0으로 처리
+      return (firstNDigits * magnitude) / mulVal;  // 첫 N 자리를 남기고 나머지는 0으로 처리
     }
 
     // 차트 옵션 생성
@@ -313,7 +325,7 @@
                 mode: 'horizontal',
                 scaleID: 'y',
                 value: level,
-                borderColor: 'rgba(255, 0, 0, 0.005)',
+                borderColor: 'rgba(255, 0, 0, 0.07)',
                 borderWidth: 2,
               })),
               // 현재 가격 라인 추가 (점선 스타일로 설정)
