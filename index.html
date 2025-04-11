@@ -177,17 +177,14 @@
 
     // 저항과 지지를 그리는 함수
     function calculateSRLine(highPrices, lowPrices, volumes, div = 10000, percentage = 10) { // 저항 지지선 divider, 저항선 뽑는 개수 
-      let highPrice = -Infinity;  // 최댓값을 찾는 반복문 최적화
-      let lowPrice = Infinity;    // 최솟값을 찾는 반복문 최적화
-
-      for (let i = 0; i < highPrices.length; i++) {
-        highPrice = Math.max(highPrice, highPrices[i]);
-        lowPrice = Math.min(lowPrice, lowPrices[i]);
-      }
+      
+      const highPrice = Math.max(...highPrices);  // 최댓값을 찾는 반복문 최적화
+      const lowPrice = Math.min(...lowPrices);    // 최솟값을 찾는 반복문 최적화
+      const priceRange = highPrice - lowPrice;
 
       let priceLines = [];
       for (let i = 0; i <= div; i++) {
-        priceLines.push([lowPrice + (i / div) * (highPrice - lowPrice), 0]);  // toFixed 제거
+        priceLines.push([lowPrice + (i / div) * (priceRange), 0]);  // toFixed 제거
       }
       for (let i = 0; i < volumes.length; i++) {
         const lowPriceInCandle = lowPrices[i];
@@ -211,21 +208,23 @@
         }
       }
 
-      let map = new Map();
+      // priceLine 배열 재 정렬
+      let arrangePriceLine = new Map();
+      const newDiv = Math.floor(priceRange / (div / 10));
       for (let i = 0; i <= div; i++) {
-        const price = getFirstNDigits(priceLines[i][0], 4);
-        if (!map.has(price)) {
-          map.set(price, priceLines[i][1]);
+        const price = Math.floor(priceLines[i][0] / newDiv) * newDiv;
+        if (!arrangePriceLine.has(price)) {
+          arrangePriceLine.set(price, priceLines[i][1]);
         } else {
-          map.set(price, map.get(price) + priceLines[i][1]);
+          arrangePriceLine.set(price, arrangePriceLine.get(price) + priceLines[i][1]);
         }
       }
       
-      let sortedArray = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+      let sortedArray = Array.from(arrangePriceLine.entries()).sort((a, b) => b[1] - a[1]);
       let sortedMap = new Map(sortedArray);
       
       return Array.from(sortedMap.keys()).slice(0, Math.floor(sortedMap.size * (percentage / 100))).sort();
-    }    
+    }
 
     // 차트 데이터 생성
     function createChartData(labels, closePrices, volumes, longRatio) {
