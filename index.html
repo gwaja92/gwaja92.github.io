@@ -92,12 +92,13 @@
     async function getKlineData(currentInterval, dataLimit) {
       const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${currentInterval}&limit=${dataLimit}`;
       const data = await fetchData(url);
-
+      
       const labels = [];
       const closePrices = [];
       const highPrices = [];
       const lowPrices = [];
       const volumes = [];
+      const takerVolumes = [];
 
       data.forEach(item => {
         const timestamp = new Date(item[0]);
@@ -107,9 +108,10 @@
         lowPrices.push(parseFloat(item[3]));
         closePrices.push(parseFloat(item[4]));
         volumes.push(parseFloat(item[5]));
+        takerVolumes.push(parseFloat(item[9]));
       });
 
-      return { labels, highPrices, lowPrices, closePrices, volumes, lastPrice: closePrices[closePrices.length - 1] };
+      return { labels, highPrices, lowPrices, closePrices, volumes, takerVolumes, lastPrice: closePrices[closePrices.length - 1] };
     }
 
     // 시간을 yyMMdd HH:mm 형식으로 변환하는 함수
@@ -138,7 +140,7 @@
     async function getLongShortPositionRatio() {
       const url = `https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=${currentInterval}&limit=${dataLimit}`;
       const data = await fetchData(url);
-
+      
       const longPositions = data.map(item => parseFloat(item.longAccount));
       return new Array(dataLimit - longPositions.length).fill(0).concat(longPositions);  // 부족한 데이터 0으로 채우기
     }
@@ -176,20 +178,20 @@
     }
 
     // 저항과 지지를 그리는 함수
-    function calculateSRLine(highPrices, lowPrices, volumes, div = 10000, percentage = 10) { // 저항 지지선 divider, 저항선 뽑는 개수 
+    function calculateSRLine(highPrices, lowPrices, takerVolumes, div = 10000, percentage = 10) { // 저항 지지선 divider, 저항선 뽑는 비율 percentage
       
-      const highPrice = Math.max(...highPrices);  // 최댓값을 찾는 반복문 최적화
-      const lowPrice = Math.min(...lowPrices);    // 최솟값을 찾는 반복문 최적화
+      const highPrice = Math.max(...highPrices);
+      const lowPrice = Math.min(...lowPrices);
       const priceRange = highPrice - lowPrice;
 
       let priceLines = [];
       for (let i = 0; i <= div; i++) {
-        priceLines.push([lowPrice + (i / div) * (priceRange), 0]);  // toFixed 제거
+        priceLines.push([lowPrice + (i / div) * (priceRange), 0]);
       }
-      for (let i = 0; i < volumes.length; i++) {
+      for (let i = 0; i < takerVolumes.length; i++) {
         const lowPriceInCandle = lowPrices[i];
         const highPriceInCandle = highPrices[i];
-        const volumeInCandle = volumes[i];
+        const volumeInCandle = takerVolumes[i];
 
         let lowIndex = div;
         let highIndex = 0;
@@ -376,8 +378,8 @@
           break;
       }
 
-      const { highPrices, lowPrices, volumes} = await getKlineData(localInterval, localLimit);
-      return calculateSRLine(highPrices, lowPrices, volumes);
+      const { highPrices, lowPrices, takerVolumes } = await getKlineData(localInterval, localLimit);
+      return calculateSRLine(highPrices, lowPrices, takerVolumes);
     }
     
     function getCriticalLine(supportResistanceLine, priceRange) {
