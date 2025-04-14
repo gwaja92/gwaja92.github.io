@@ -94,9 +94,10 @@
       const data = await fetchData(url);
       
       const labels = [];
-      const closePrices = [];
+      const openPrices = [];
       const highPrices = [];
       const lowPrices = [];
+      const closePrices = [];
       const volumes = [];
       const takerVolumes = [];
 
@@ -104,6 +105,7 @@
         const timestamp = new Date(item[0]);
         const formattedTimestamp = formatDate(timestamp);
         labels.push(formattedTimestamp);
+        openPrices.push(parseFloat(item[1]));
         highPrices.push(parseFloat(item[2]));
         lowPrices.push(parseFloat(item[3]));
         closePrices.push(parseFloat(item[4]));
@@ -111,7 +113,7 @@
         takerVolumes.push(parseFloat(item[9]));
       });
 
-      return { labels, highPrices, lowPrices, closePrices, volumes, takerVolumes, lastPrice: closePrices[closePrices.length - 1] };
+      return { labels, openPrices, highPrices, lowPrices, closePrices, volumes, takerVolumes, lastPrice: closePrices[closePrices.length - 1] };
     }
 
     // 시간을 yyMMdd HH:mm 형식으로 변환하는 함수
@@ -178,7 +180,7 @@
     }
 
     // 저항과 지지를 그리는 함수
-    function calculateSRLine(highPrices, lowPrices, takerVolumes, div = 10000, percentage = 10) { // 저항 지지선 divider, 저항선 뽑는 비율 percentage
+    function calculateSRLine(openPrices, highPrices, lowPrices, closePrices, takerVolumes, div = 10000, percentage = 8) { // 저항 지지선 divider, 저항선 뽑는 비율 percentage
       
       const highPrice = Math.max(...highPrices);
       const lowPrice = Math.min(...lowPrices);
@@ -189,8 +191,10 @@
         priceLines.push([lowPrice + (i / div) * (priceRange), 0]);
       }
       for (let i = 0; i < takerVolumes.length; i++) {
-        const lowPriceInCandle = lowPrices[i];
+        const openPriceInCandle = openPrices[i];
         const highPriceInCandle = highPrices[i];
+        const lowPriceInCandle = lowPrices[i];
+        const closePriceInCandle = closePrices[i];
         const volumeInCandle = takerVolumes[i];
 
         let lowIndex = div;
@@ -201,12 +205,19 @@
           if (priceLines[j][0] >= lowPriceInCandle && lowIndex === div) lowIndex = j;
           if (priceLines[j][0] <= highPriceInCandle) highIndex = j;
         }
-
-        const partialVolume = volumeInCandle / (highIndex - lowIndex + 1);
+        
+        const partialDiv = 2 * (highPriceInCandle - lowPriceInCandle) + (openPriceInCandle - closePriceInCandle) * (openPriceInCandle <= closePriceInCandle ? 1 : -1);
+        const partialVolume = volumeInCandle / partialDiv;
 
         // priceLines 업데이트
         for (let j = lowIndex; j <= highIndex; j++) {
           priceLines[j][1] += partialVolume;
+          const price = priceLines[j][0];
+          if (price >= openPriceInCandle && price >= closePriceInCandle) {
+            priceLines[j][1] += partialVolume;
+          } else if (price <= openPriceInCandle && price <= closePriceInCandle) {
+            priceLines[j][1] += partialVolume;
+          }
         }
       }
 
@@ -378,8 +389,8 @@
           break;
       }
 
-      const { highPrices, lowPrices, takerVolumes } = await getKlineData(localInterval, localLimit);
-      return calculateSRLine(highPrices, lowPrices, takerVolumes);
+      const { openPrices, highPrices, lowPrices, closePrices, takerVolumes } = await getKlineData(localInterval, localLimit);
+      return calculateSRLine(openPrices, highPrices, lowPrices, closePrices, takerVolumes);
     }
     
     function getCriticalLine(supportResistanceLine, priceRange) {
