@@ -180,7 +180,7 @@
     }
 
     // 저항과 지지를 그리는 함수
-    function calculateSRLine(openPrices, highPrices, lowPrices, closePrices, takerVolumes, div = 10000, percentage = 8) { // 저항 지지선 divider, 저항선 뽑는 비율 percentage
+    function calculateSRLine(openPrices, highPrices, lowPrices, closePrices, takerVolumes, div = 10000, percentage = 10) { // 저항 지지선 divider, 저항선 뽑는 비율 percentage
       
       const highPrice = Math.max(...highPrices);
       const lowPrice = Math.min(...lowPrices);
