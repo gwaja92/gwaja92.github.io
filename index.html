@@ -180,7 +180,7 @@
     }
 
     // 저항과 지지를 그리는 함수
-    function calculateSRLine(openPrices, highPrices, lowPrices, closePrices, takerVolumes, div = 10000, percentage = 10) { // 저항 지지선 divider, 저항선 뽑는 비율 percentage
+    function calculateSRLine(openPrices, highPrices, lowPrices, closePrices, takerVolumes, div = 10000, percentage = 25) { // 저항 지지선 divider, 저항선 뽑는 비율 percentage (총거래량 기준)
       
       const highPrice = Math.max(...highPrices);
       const lowPrice = Math.min(...lowPrices);
@@ -233,10 +233,18 @@
         }
       }
       
+      let targetVolume = [...arrangePriceLine.values()].reduce((a, b) => a + b, 0) * (percentage / 100);
       let sortedArray = Array.from(arrangePriceLine.entries()).sort((a, b) => b[1] - a[1]);
       let sortedMap = new Map(sortedArray);
-      
-      return Array.from(sortedMap.keys()).slice(0, Math.floor(sortedMap.size * (percentage / 100))).sort();
+
+      let cumulativeVolume = 0;
+      let topMap = new Map();
+      for (let [price, volume] of sortedMap.entries()) {
+        if (cumulativeVolume >= targetVolume) break;
+        topMap.set(price, volume);
+        cumulativeVolume += volume;
+      }
+      return Array.from(topMap.keys()).sort((a, b) => a - b);
     }
 
     // 차트 데이터 생성
