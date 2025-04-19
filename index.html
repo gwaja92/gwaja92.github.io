@@ -223,10 +223,8 @@
 
       // priceLine 배열 재 정렬
       let arrangePriceLine = new Map();
-      let newDiv = Math.floor(priceRange / (div / 10));
-      if (newDiv == 0) {
-        newDiv = 1;
-      }
+      const newDiv = Math.floor(priceRange / (div / 10)) + 1; // to avoid 0 divider
+   
       for (let i = 0; i <= div; i++) {
         const price = Math.floor(priceLines[i][0] / newDiv) * newDiv;
         if (!arrangePriceLine.has(price)) {
