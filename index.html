@@ -51,7 +51,6 @@
     <h1>BTCUSDT 4H</h1>
     <div id="loading">로딩 중...</div>
     <div id="time-controls" style="text-align: center; margin-bottom: 20px;">
-      <button class="time-btn" data-interval="5m">5m</button>
       <button class="time-btn" data-interval="15m">15m</button>
       <button class="time-btn" data-interval="1h">1H</button>
       <button class="time-btn" data-interval="4h">4H</button>
@@ -136,6 +135,34 @@
         if (i >= windowSize - 1) sma[i] = sum / windowSize;
       }
       return sma;
+    }
+
+    function calculateBollingerBands(closePrices, period = 20, stdDevMultiplier = 2.3) {
+        const n = closePrices.length;
+        const middleBand = calculateSMA(closePrices, period); // 중간 밴드 (SMA) 계산
+        const upperBand = new Array(n).fill(null);
+        const lowerBand = new Array(n).fill(null);
+
+        for (let i = period - 1; i < n; i++) {
+            // 현재 윈도우의 종가 데이터 추출
+            const windowPrices = closePrices.slice(i - period + 1, i + 1);
+            const mean = middleBand[i]; // 해당 윈도우의 평균 (SMA 값)
+
+            // 표준 편차 계산
+            let sumOfSquaredDifferences = 0;
+            for (let j = 0; j < period; j++) {
+                sumOfSquaredDifferences += Math.pow(windowPrices[j] - mean, 2);
+            }
+            const variance = sumOfSquaredDifferences / period;
+            const stdDev = Math.sqrt(variance);
+
+            // 상단 밴드 및 하단 밴드 계산
+            upperBand[i] = mean + (stdDevMultiplier * stdDev);
+            lowerBand[i] = mean - (stdDevMultiplier * stdDev);
+        }
+
+        // 상단 밴드와 하단 밴드 배열만 반환
+        return { upper: upperBand, lower: lowerBand };
     }
 
     // topLongShortPositionRatio
@@ -249,9 +276,13 @@
     }
 
     // 차트 데이터 생성
-    function createChartData(labels, closePrices, volumes, longRatio) {
+    function createChartData(labels, highPrices, lowPrices, closePrices, volumes, longRatio) {
 
       const avgVolume = volumes.reduce((acc, val) => acc + val, 0) / volumes.length;
+
+      const bollingerBands = calculateBollingerBands(closePrices); // 볼린저 밴드 상단/하단 계산
+      const upperBand = bollingerBands.upper; // 상단 밴드 데이터 가져오기
+      const lowerBand = bollingerBands.lower; // 하단 밴드 데이터 가져오기
 
       return {
         labels: labels,
@@ -262,8 +293,19 @@
             borderColor: 'green',
             fill: false,
             borderWidth: 1,
-            pointRadius: closePrices.map((_, index) => index === closePrices.length - 1 ? 3 : 0),
-            pointBackgroundColor: 'red'
+            pointRadius: closePrices.map((price, index) => {
+                const isLastPoint = index === closePrices.length - 1;
+                // 내부에서 계산된 upperBand와 lowerBand 사용
+                const isOutsideBands = (upperBand[index] !== null && highPrices[index] >= upperBand[index]) ||
+                                       (lowerBand[index] !== null && lowPrices[index] <= lowerBand[index]);
+
+                if (isOutsideBands) {
+                    return 3; // 점을 표시할 크기
+                } else {
+                    return 0; // 점을 표시하지 않음
+                }
+            }),
+            pointBackgroundColor: 'blue'
           },
           {
             label: '중간선 (Middle Band)',
@@ -470,7 +512,7 @@
       let duration = (currentInterval !== prevInterval) ? 1000 : 0;
       prevInterval = currentInterval;
       
-      const chartData = createChartData(labels, closePrices, volumes, longRatio);
+      const chartData = createChartData(labels, highPrices, lowPrices, closePrices, volumes, longRatio);
       const chartOptions = createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, duration);
 
       // 차트가 이미 존재하면 업데이트
