@@ -301,12 +301,12 @@
                                        (lowerBand[index] !== null && lowPrices[index] <= lowerBand[index]);
 
                 if (isOutsideBands && volumes[index] >= (avgVolume * mulVal)) {
-                    return 2; // 점을 표시할 크기
+                    return 3; // 점을 표시할 크기
                 } else {
                     return 0; // 점을 표시하지 않음
                 }
             }),
-            pointBackgroundColor: 'green'
+            pointBackgroundColor: 'red'
           },
           {
             label: '중간선 (Middle Band)',
