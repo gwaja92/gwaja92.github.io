@@ -353,8 +353,8 @@
     // 차트 옵션 생성
     function createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, duration) {
       
-      const highPrice = Math.max(...closePrices);
-      const lowPrice = Math.min(...closePrices);
+      const highPrice = Math.max(...highPrices);
+      const lowPrice = Math.min(...lowPrices);
       const highLowGab = highPrice - lowPrice;
       const maxVal = highPrice + highLowGab/6;
       const minVal = lowPrice - highLowGab/4;
