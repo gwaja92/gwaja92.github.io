@@ -299,8 +299,9 @@
                 // 내부에서 계산된 upperBand와 lowerBand 사용
                 const isOutsideBands = //(upperBand[index] !== null && highPrices[index] >= upperBand[index]) ||
                                        (lowerBand[index] !== null && lowPrices[index] <= lowerBand[index]);
-
-                if (isOutsideBands && volumes[index] >= (avgVolume * mulVal)) {
+                const afterLow = (index - 1 >= 0) && (lowPrices[index] <= lowPrices[index - 1]);
+                
+                if (isOutsideBands && volumes[index] >= (avgVolume * mulVal) && afterLow) {
                     return 3; // 점을 표시할 크기
                 } else {
                     return 0; // 점을 표시하지 않음
