@@ -31,14 +31,48 @@
     .price-label {
       font-size: 20px;
       font-weight: bold;
-      color: #4bc0c0;
+      color: #2e7d32;
       text-align: center;
     }
     .line-label {
       font-size: 15px;
       font-weight: bold;
-      color: #4bc0c0;
+      color: #1b5e20;
       text-align: center;
+    }
+    .zone-summary {
+      display: flex;
+      justify-content: center;
+      margin: 14px 0;
+      padding: 0 12px;
+    }
+    .zone-card {
+      width: 100%;
+      max-width: 680px;
+      background: #e8f5e9;
+      border: 1px solid #c8e6c9;
+      border-radius: 14px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+    .zone-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .zone-table th,
+    .zone-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+    .zone-table th {
+      text-align: left;
+      color: #1b5e20;
+      font-weight: 700;
+      background: rgba(76, 175, 80, 0.08);
+    }
+    .zone-current {
+      background: rgba(76, 175, 80, 0.14);
     }
     .highlight {
       color: red;  /* 'P'를 빨간색으로 */
@@ -57,6 +91,8 @@
       <button class="time-btn" data-interval="1d">1D</button>
     </div>
     <div class="price-label" id="current-price">Curret Price loading...</div>
+    <div class="line-label" id="ctf-value">CMF loading...</div>
+    <div class="zone-summary" id="zone-summary">Zone info loading...</div>
     <div class="line-label" id="important-line">Important line loading...</div>
     <div class="chart">
       <canvas id="combinedChart"></canvas>
@@ -163,6 +199,134 @@
 
         // 상단 밴드와 하단 밴드 배열만 반환
         return { upper: upperBand, lower: lowerBand };
+    }
+
+    function buildVolumeZones(highPrices, lowPrices, volumes, bins = 48) {
+      const highPrice = Math.max(...highPrices);
+      const lowPrice = Math.min(...lowPrices);
+      const range = highPrice - lowPrice;
+      if (range <= 0 || volumes.length === 0) return [];
+
+      const binSize = range / bins;
+      const profile = new Array(bins).fill(0);
+
+      for (let i = 0; i < volumes.length; i++) {
+        const lo = lowPrices[i];
+        const hi = highPrices[i];
+        if (hi <= lo) continue;
+
+        const start = Math.max(0, Math.floor((lo - lowPrice) / binSize));
+        const end = Math.min(bins - 1, Math.floor((hi - lowPrice) / binSize));
+        const count = Math.max(1, end - start + 1);
+        const volPerBin = volumes[i] / count;
+
+        for (let j = start; j <= end; j++) {
+          profile[j] += volPerBin;
+        }
+      }
+
+      const averageProfile = profile.reduce((sum, value) => sum + value, 0) / bins;
+      const threshold = Math.max(averageProfile * 1.2, Math.max(...profile) * 0.15);
+      const zones = [];
+      let startIndex = null;
+      let zoneVolume = 0;
+
+      for (let i = 0; i < bins; i++) {
+        const hasVolume = profile[i] >= threshold;
+        if (hasVolume) {
+          if (startIndex === null) {
+            startIndex = i;
+            zoneVolume = 0;
+          }
+          zoneVolume += profile[i];
+        }
+
+        if (!hasVolume || i === bins - 1) {
+          if (startIndex !== null) {
+            const endIndex = hasVolume && i === bins - 1 ? i : i - 1;
+            const bot = lowPrice + startIndex * binSize;
+            const top = lowPrice + (endIndex + 1) * binSize;
+            if (top - bot > binSize * 1.1) {
+              zones.push({ bot, top, mid: (bot + top) / 2, width: top - bot, volume: zoneVolume });
+            }
+            startIndex = null;
+          }
+        }
+      }
+
+      return zones.sort((a, b) => b.volume - a.volume).slice(0, 3);
+    }
+
+    function renderZoneSummaryTable(zones, lastPrice) {
+      if (!zones || zones.length === 0) {
+        return `<div class="zone-card"><div style="padding: 16px; color: #2e7d32; text-align: center;">매물대 정보 없음</div></div>`;
+      }
+
+      const rows = zones.slice(0, 3).map((zone, idx) => {
+        const isCurrent = lastPrice >= zone.bot && lastPrice <= zone.top;
+        return `
+          <tr class="${isCurrent ? 'zone-current' : ''}">
+            <td>Zone ${idx + 1}</td>
+            <td>${zone.bot.toFixed(1)} ~ ${zone.top.toFixed(1)}</td>
+            <td>${zone.width.toFixed(1)}</td>
+            <td>${Math.round(zone.volume)}</td>
+            <td>${isCurrent ? '현재' : '-'}</td>
+          </tr>`;
+      }).join('');
+
+      return `
+        <div class="zone-card">
+          <table class="zone-table">
+            <thead>
+              <tr>
+                <th>Zone</th>
+                <th>Range</th>
+                <th>Width</th>
+                <th>Volume</th>
+                <th>Current</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function calculateCMF(highPrices, lowPrices, closePrices, volumes, period = 20) {
+      if (highPrices.length < period) return null;
+      let mfvSum = 0;
+      let volSum = 0;
+      for (let i = highPrices.length - period; i < highPrices.length; i++) {
+        const high = highPrices[i];
+        const low = lowPrices[i];
+        const close = closePrices[i];
+        const volume = volumes[i];
+        const denominator = high - low || 1;
+        const moneyFlowMultiplier = ((close - low) - (high - close)) / denominator;
+        mfvSum += moneyFlowMultiplier * volume;
+        volSum += volume;
+      }
+      return volSum === 0 ? null : mfvSum / volSum;
+    }
+
+    function calculateCMFSeries(highPrices, lowPrices, closePrices, volumes, period = 20) {
+      const result = new Array(closePrices.length).fill(null);
+      for (let i = 0; i < closePrices.length; i++) {
+        if (i < period - 1) continue;
+        let mfvSum = 0;
+        let volSum = 0;
+        for (let j = i - period + 1; j <= i; j++) {
+          const high = highPrices[j];
+          const low = lowPrices[j];
+          const close = closePrices[j];
+          const volume = volumes[j];
+          const denominator = high - low || 1;
+          const moneyFlowMultiplier = ((close - low) - (high - close)) / denominator;
+          mfvSum += moneyFlowMultiplier * volume;
+          volSum += volume;
+        }
+        result[i] = volSum === 0 ? null : mfvSum / volSum;
+      }
+      return result;
     }
 
     // topLongShortPositionRatio
@@ -276,7 +440,7 @@
     }
 
     // 차트 데이터 생성
-    function createChartData(labels, highPrices, lowPrices, closePrices, volumes, longRatio) {
+    function createChartData(labels, highPrices, lowPrices, closePrices, volumes, longRatio, cmfSeries) {
 
       const avgVolume = volumes.reduce((acc, val) => acc + val, 0) / volumes.length;
       const mulVal = 2.2;
@@ -291,20 +455,17 @@
           {
             label: 'BTC/USDT',
             data: closePrices,
-            borderColor: 'green',
+            borderColor: '#1b5e20',
             fill: false,
             borderWidth: 1,
             pointRadius: closePrices.map((price, index) => {
                 const isLastPoint = index === closePrices.length - 1;
-                // 내부에서 계산된 upperBand와 lowerBand 사용
-                const isOutsideBands = //(upperBand[index] !== null && highPrices[index] >= upperBand[index]) ||
-                                       (lowerBand[index] !== null && lowPrices[index] <= lowerBand[index]);
+                const isOutsideBands = (lowerBand[index] !== null && lowPrices[index] <= lowerBand[index]);
                 const afterLow = (index - 1 >= 0) && (lowPrices[index] <= lowPrices[index - 1]);
-                
                 if (isOutsideBands && volumes[index] >= (avgVolume * mulVal) && afterLow) {
-                    return 3; // 점을 표시할 크기
+                    return 3;
                 } else {
-                    return 0; // 점을 표시하지 않음
+                    return 0;
                 }
             }),
             pointBackgroundColor: 'red'
@@ -323,6 +484,17 @@
             type: 'bar',
             backgroundColor: volumes.map(volume => volume > avgVolume * mulVal ? '#FF9E56' : '#AFBDFF'),
             fill: false,
+            yAxisID: 'y2',
+          },
+          {
+            label: 'CMF',
+            data: cmfSeries,
+            type: 'line',
+            borderColor: '#ff3d00',
+            backgroundColor: '#ff3d00',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.25,
             yAxisID: 'y2',
           },
           {
@@ -352,13 +524,24 @@
     }
 
     // 차트 옵션 생성
-    function createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, duration) {
+    function createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, volumeZones, duration) {
       
       const highPrice = Math.max(...highPrices);
       const lowPrice = Math.min(...lowPrices);
       const highLowGab = highPrice - lowPrice;
       const maxVal = highPrice + highLowGab/6;
       const minVal = lowPrice - highLowGab/4;
+
+      const zoneAnnotations = (volumeZones || []).map((zone, idx) => ({
+        type: 'box',
+        xScaleID: 'x',
+        yScaleID: 'y',
+        yMin: zone.bot,
+        yMax: zone.top,
+        backgroundColor: idx === 0 ? 'rgba(38, 166, 91, 0.22)' : 'rgba(165, 214, 167, 0.12)',
+        borderColor: idx === 0 ? 'rgba(27, 94, 32, 0.55)' : 'rgba(56, 142, 60, 0.28)',
+        borderWidth: 1,
+      }));
 
       return {
         scales: {
@@ -384,7 +567,7 @@
           legend: { display: false },
           annotation: {
             annotations: [
-              // 기존의 지지선/저항선 라인
+              ...zoneAnnotations,
               ...supportResistanceLine.map((level, index) => ({
                 type: 'line',
                 mode: 'horizontal',
@@ -393,15 +576,14 @@
                 borderColor: 'rgba(255, 0, 0, 0.07)',
                 borderWidth: 2,
               })),
-              // 현재 가격 라인 추가 (점선 스타일로 설정)
               {
                 type: 'line',
                 mode: 'horizontal',
                 scaleID: 'y',
-                value: closePrices[closePrices.length - 1],  // 현재 가격
-                borderColor: 'blue',   // 선 색상
+                value: closePrices[closePrices.length - 1],
+                borderColor: 'blue',
                 borderWidth: 1,
-                borderDash: [2, 10],  // 점선 스타일 (5px 선, 5px 간격)
+                borderDash: [2, 10],
               }
             ]
           }
@@ -510,12 +692,23 @@
       
       const supportResistanceLine = srLine;
       const criticalLine = getCriticalLine(supportResistanceLine, Math.max(...highPrices)-Math.min(...lowPrices));
+      const cmfSeries = calculateCMFSeries(highPrices, lowPrices, closePrices, volumes);
 
       let duration = (currentInterval !== prevInterval) ? 1000 : 0;
       prevInterval = currentInterval;
       
-      const chartData = createChartData(labels, highPrices, lowPrices, closePrices, volumes, longRatio);
-      const chartOptions = createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, duration);
+      const volumeZones = buildVolumeZones(highPrices, lowPrices, volumes);
+      const maxVol = Math.max(...volumes);
+      const minSmf = Math.min(...cmfSeries);
+      const maxSmf = Math.max(...cmfSeries);
+
+      const cmfSeriesScaled = cmfSeries.map(value => {
+        if (value === null) return null;
+        return (value - minSmf) * ((Math.max(...volumes)) / (maxSmf - minSmf));
+      });
+
+      const chartData = createChartData(labels, highPrices, lowPrices, closePrices, volumes, longRatio, cmfSeriesScaled);
+      const chartOptions = createChartOptions(highPrices, lowPrices, closePrices, volumes, supportResistanceLine, volumeZones, duration);
 
       // 차트가 이미 존재하면 업데이트
       if (chart) {
@@ -543,7 +736,11 @@
 
       criticalLine[criticalLine.indexOf(lastPrice)] = '<span class="highlight">(P)</span>';
 
+      const zoneHTML = renderZoneSummaryTable(volumeZones, lastPrice);
+      const cmfValue = calculateCMF(highPrices, lowPrices, closePrices, volumes);
       document.getElementById('current-price').innerText = `Price: ${lastPrice.toFixed(1)} Long: ${(lastRatio/(lastRatio + 1)*100).toFixed(1)}% [${lastRatio.toFixed(2)}]`;
+      document.getElementById('ctf-value').innerText = cmfValue !== null ? `CMF: ${cmfValue.toFixed(3)}` : 'CMF: N/A';
+      document.getElementById('zone-summary').innerHTML = zoneHTML;
       document.getElementById('important-line').innerHTML = `${criticalLine.join('   ')}`;
       document.getElementById('loading').style.display = 'none';  // 로딩 메시지 숨기기
     }
